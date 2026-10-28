@@ -25,7 +25,8 @@ function Run($exe, [string[]]$arguments) {
 
 # pnpm (exigé par Vencord) : via corepack s'il est là (Node 22/24), sinon pnpm installé, sinon npx
 # avec la version exacte demandée par Vencord (Node 25 et plus ne fournissent plus corepack)
-function Pnpm([string[]]$arguments) {
+# (nom distinct de « pnpm » : PowerShell ignore la casse, la fonction s'appellerait elle-même)
+function Invoke-Pnpm([string[]]$arguments) {
     if (Get-Command corepack -ErrorAction SilentlyContinue) {
         Run corepack (@("pnpm") + $arguments)
     } elseif (Get-Command pnpm -ErrorAction SilentlyContinue) {
@@ -54,15 +55,15 @@ if ($Mode -ne "inject") {
     Write-Host "→ Compilation"
     Push-Location $VencordDir
     try {
-        Pnpm @("install", "--frozen-lockfile")
-        Pnpm @("build")
+        Invoke-Pnpm @("install", "--frozen-lockfile")
+        Invoke-Pnpm @("build")
     } finally { Pop-Location }
 }
 
 if ($Mode -ne "update") {
     Write-Host "→ Injection dans Discord : choisis ton Discord dans la liste."
     Push-Location $VencordDir
-    try { Pnpm @("inject") } finally { Pop-Location }
+    try { Invoke-Pnpm @("inject") } finally { Pop-Location }
 }
 
 Write-Host ""
