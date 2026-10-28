@@ -1,0 +1,14 @@
+{
+	"name": "tiroir-android",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "node build.mjs",
+		"serve": "node serve.mjs",
+		"check": "tsc -p . && node build.mjs && node test-eval.mjs"
+	},
+	"devDependencies": {
+		"esbuild": "0.25.10",
+		"typescript": "5.9.3"
+	}
+}

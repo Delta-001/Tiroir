@@ -1,0 +1,6 @@
+{
+    "name": "Tiroir",
+    "description": "Panneau discret : salons épinglés, notifications, notes et messages épinglés.",
+    "authors": [{ "name": "Delta-001", "id": "0" }],
+    "vendetta": { "icon": "ic_pin" }
+}
