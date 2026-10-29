@@ -6,7 +6,7 @@
 
 import { openUserProfile } from "@utils/discord";
 import { Channel, Role } from "@vencord/discord-types";
-import { ChannelStore, GuildRoleStore, GuildStore, NavigationRouter, showToast, UserStore, UserUtils, useStateFromStores } from "@webpack/common";
+import { ChannelStore, GuildRoleStore, GuildStore, NavigationRouter, ReactDOM, showToast, useEffect, UserStore, UserUtils, useState, useStateFromStores } from "@webpack/common";
 import type { ReactNode } from "react";
 
 import { copyImage, useImage } from "../images";
@@ -93,24 +93,48 @@ function ChannelMention({ id }: { id: string; }) {
     );
 }
 
+const copy = (id: string) => copyImage(id)
+    .then(() => showToast({ text: "Image copiée" }))
+    .catch(() => showToast({ text: "Impossible de copier l'image", variant: "critical" }));
+
+/** Image en grand, par-dessus Discord : clic à côté ou Échap pour fermer */
+function Lightbox({ id, src, onClose }: { id: string; src: string; onClose(): void; }) {
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, []);
+
+    return ReactDOM.createPortal(
+        <div className={cl("lightbox")} onClick={onClose}>
+            <img className={cl("lightbox-image")} src={src} alt="" onClick={e => e.stopPropagation()} />
+            <div className={cl("lightbox-actions")} onClick={e => e.stopPropagation()}>
+                <button className={cl("lightbox-button")} onClick={() => copy(id)}>Copier l'image</button>
+                <button className={cl("lightbox-button")} onClick={onClose}>Fermer</button>
+            </div>
+        </div>,
+        document.body
+    );
+}
+
 function NoteImage({ id }: { id: string; }) {
     const src = useImage(id);
+    const [zoomed, setZoomed] = useState(false);
     if (!src) return <span className={cl("image-missing")}>[image introuvable]</span>;
     return (
         <span className={cl("note-image-wrap")}>
-            <img className={cl("note-image")} src={src} alt="" />
+            <img className={cl("note-image", "note-image-zoomable")} src={src} alt="" title="Cliquer pour agrandir" onClick={() => setZoomed(true)} />
             <button
                 className={cl("note-image-copy")}
                 title="Copier l'image (à coller dans un message, une preuve de report…)"
                 onClick={e => {
                     e.stopPropagation();
-                    copyImage(id)
-                        .then(() => showToast({ text: "Image copiée" }))
-                        .catch(() => showToast({ text: "Impossible de copier l'image", variant: "critical" }));
+                    copy(id);
                 }}
             >
                 Copier
             </button>
+            {zoomed && <Lightbox id={id} src={src} onClose={() => setZoomed(false)} />}
         </span>
     );
 }

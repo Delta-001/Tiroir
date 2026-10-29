@@ -199,7 +199,7 @@ function NoteView({ tab }: { tab: Tab; }) {
         <div className={cl("note-wrap")} tabIndex={-1} onKeyDown={onKeyDown}>
             {searching && <SearchBar query={query} setQuery={setQuery} count={count} current={current} onStep={step} onClose={closeSearch} />}
             {toolbar}
-            <div ref={preview} className={cl("note")} onClick={e => (e.target as HTMLElement).closest("a, ." + cl("mention")) || setEditing(true)}>
+            <div ref={preview} className={cl("note")} onClick={e => (e.target as HTMLElement).closest("a, ." + cl("mention") + ", ." + cl("note-image-wrap")) || setEditing(true)}>
                 {text.trim()
                     ? <RichText text={text} className={cl("note-text")} query={searching ? query : undefined} />
                     : (
