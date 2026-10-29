@@ -57,6 +57,8 @@ node -e 'const [file, repoDir, pnpm, ...path] = process.argv.slice(1); require("
     "$VENCORD_DIR/tiroir-install.json" "$REPO_DIR" "$PNPM_CMD" \
     "$(dirname "$(command -v node)")" "$(dirname "$(command -v git)")" $(command -v pnpm >/dev/null 2>&1 && dirname "$(command -v pnpm)")
 
+git -C "$REPO_DIR" rev-parse HEAD > "$VENCORD_DIR/tiroir-version.txt"
+
 if [ "$MODE" != "update" ]; then
     echo "→ Injection dans Discord : choisis ton Discord dans la liste."
     echo "  Si macOS bloque l'opération, autorise Terminal dans"

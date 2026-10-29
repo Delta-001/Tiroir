@@ -14,7 +14,7 @@
  */
 
 import { execFile } from "child_process";
-import { cpSync, existsSync, readFileSync, rmSync } from "fs";
+import { cpSync, existsSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { delimiter, join } from "path";
 
 // Vencord est chargé depuis <Vencord>/dist
@@ -69,16 +69,33 @@ function run(config: InstallConfig, command: string[], cwd: string): Promise<str
 }
 
 
+const REPO_URL = "https://github.com/Delta-001/Tiroir";
+// Copie du dépôt gérée par le plugin, dans le dossier Vencord (où Discord a le droit d'écrire)
+const SOURCE_DIR = join(VENCORD_DIR, "tiroir-source");
+// Version installée (commit), écrite par le script d'installation puis à chaque mise à jour
+const VERSION_PATH = join(VENCORD_DIR, "tiroir-version.txt");
+
+const short = (sha: string) => sha.slice(0, 7);
+
+async function installedVersion(config: InstallConfig): Promise<string> {
+    if (existsSync(VERSION_PATH)) return readFileSync(VERSION_PATH, "utf8").replace(/^\uFEFF/, "").trim();
+    // Anciennes installations : version du dépôt cloné (lecture seule)
+    return run(config, ["git", "rev-parse", "HEAD"], config.repoDir);
+}
+
+/** Dernier commit publié sur GitHub (sans rien écrire sur le disque) */
+async function latestVersion(config: InstallConfig): Promise<string> {
+    const out = await run(config, ["git", "ls-remote", REPO_URL, "refs/heads/main"], VENCORD_DIR);
+    return out.split(/\s/)[0];
+}
+
 /** Compare la version installée avec celle de GitHub */
 export async function checkForUpdates(): Promise<UpdateStatus> {
     const config = readConfig();
     if (typeof config === "string") return { ok: false, error: config };
     try {
-        await run(config, ["git", "fetch", "--quiet"], config.repoDir);
-        const current = await run(config, ["git", "rev-parse", "--short", "HEAD"], config.repoDir);
-        const latest = await run(config, ["git", "rev-parse", "--short", "@{u}"], config.repoDir);
-        const behind = Number(await run(config, ["git", "rev-list", "--count", "HEAD..@{u}"], config.repoDir));
-        return { ok: true, current, latest, behind };
+        const [current, latest] = await Promise.all([installedVersion(config), latestVersion(config)]);
+        return { ok: true, current: short(current), latest: short(latest), behind: current === latest ? 0 : 1 };
     } catch (e: any) {
         return { ok: false, error: e.message };
     }
@@ -89,15 +106,22 @@ export async function update(): Promise<UpdateStatus> {
     const config = readConfig();
     if (typeof config === "string") return { ok: false, error: config };
     try {
-        await run(config, ["git", "pull", "--ff-only", "--quiet"], config.repoDir);
+        if (existsSync(join(SOURCE_DIR, ".git"))) {
+            await run(config, ["git", "fetch", "--depth", "1", "--quiet", "origin", "main"], SOURCE_DIR);
+            await run(config, ["git", "reset", "--hard", "--quiet", "FETCH_HEAD"], SOURCE_DIR);
+        } else {
+            rmSync(SOURCE_DIR, { recursive: true, force: true });
+            await run(config, ["git", "clone", "--depth", "1", "--quiet", REPO_URL, SOURCE_DIR], VENCORD_DIR);
+        }
 
         const target = join(VENCORD_DIR, "src", "userplugins", "tiroir");
         rmSync(target, { recursive: true, force: true });
-        cpSync(join(config.repoDir, "desktop", "tiroir"), target, { recursive: true });
+        cpSync(join(SOURCE_DIR, "desktop", "tiroir"), target, { recursive: true });
 
         await run(config, [...config.pnpm, "build"], VENCORD_DIR);
-        const current = await run(config, ["git", "rev-parse", "--short", "HEAD"], config.repoDir);
-        return { ok: true, current, latest: current, behind: 0 };
+        const current = await run(config, ["git", "rev-parse", "HEAD"], SOURCE_DIR);
+        writeFileSync(VERSION_PATH, current);
+        return { ok: true, current: short(current), latest: short(current), behind: 0 };
     } catch (e: any) {
         return { ok: false, error: e.message };
     }

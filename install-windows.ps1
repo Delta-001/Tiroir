@@ -71,6 +71,7 @@ $PathDirs = @("node", "git", "pnpm") | ForEach-Object { (Get-Command $_ -ErrorAc
 # Écrit en UTF-8 sans BOM (Set-Content -Encoding UTF8 en ajoute un sous PowerShell 5)
 $Json = @{ repoDir = $RepoDir; pnpm = $PnpmCmd; path = @($PathDirs) } | ConvertTo-Json
 [System.IO.File]::WriteAllText((Join-Path $VencordDir "tiroir-install.json"), $Json, (New-Object System.Text.UTF8Encoding $false))
+[System.IO.File]::WriteAllText((Join-Path $VencordDir "tiroir-version.txt"), (git -C $RepoDir rev-parse HEAD).Trim(), (New-Object System.Text.UTF8Encoding $false))
 Write-Host "→ Mise à jour en un clic configurée ($(Join-Path $VencordDir 'tiroir-install.json'))"
 
 if ($Mode -ne "update") {
