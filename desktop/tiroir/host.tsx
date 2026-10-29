@@ -155,6 +155,32 @@ function sync() {
     else close();
 }
 
+/**
+ * La liste déroulante de la recherche de Discord (filtres, historique) s'ouvre sous la barre de
+ * recherche, par-dessus le panneau. On la décale vers la gauche pour qu'elle s'arrête au bord
+ * du panneau. Seules les fenêtres ancrées juste sous la barre de recherche sont concernées.
+ */
+function avoidSearchPopout() {
+    if (!host?.isConnected) return;
+    const bar = document.querySelector('[class^="searchBar_"], [class*=" searchBar_"]');
+    if (!bar) return;
+    const barBottom = bar.getBoundingClientRect().bottom;
+    const panelLeft = host.getBoundingClientRect().left;
+
+    for (const layer of document.querySelectorAll<HTMLElement>('[class^="layer_"], [class*=" layer_"]')) {
+        const shift = Number(layer.dataset.vcHubShift ?? 0);
+        const rect = layer.getBoundingClientRect();
+        const left = rect.left - shift;
+        const right = rect.right - shift;
+        if (Math.abs(rect.top - barBottom) > 32 || right <= panelLeft) continue;
+
+        const next = -Math.min(right - panelLeft + 8, left - 8);
+        if (next === shift) continue;
+        layer.dataset.vcHubShift = String(next);
+        layer.style.transform = `translateX(${next}px)`;
+    }
+}
+
 const MIN_WIDTH = 220;
 const MAX_WIDTH = 720;
 
@@ -203,7 +229,10 @@ export function mountHost() {
     // Discord reconstruit la vue à chaque changement de salon : on replace le panneau
     // dans la même tâche que la mutation, avant l'affichage, pour éviter tout clignotement
     observer = new MutationObserver(() => {
-        if (state === "open" || state === "opening") place();
+        if (state === "open" || state === "opening") {
+            place();
+            avoidSearchPopout();
+        }
     });
     observer.observe(document.body, { childList: true, subtree: true });
 
