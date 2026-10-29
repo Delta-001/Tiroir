@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, bulkAck, hideSheet, logger, moment, navigate, React, RN, showConfirmationAlert, showToast, Stores, useStores } from "../discord";
+import { apiGet, bulkAck, deleteRecentMention, hideSheet, logger, moment, navigate, React, RN, showConfirmationAlert, showToast, Stores, useStores } from "../discord";
 import { hub, MAX_CHANNEL_MESSAGES, MAX_MENTIONS, MentionEntry, MentionKind, useHub } from "../store";
 import { styles } from "../theme";
 import { avatarUrl, Empty, Row, RowAction } from "../ui/common";
@@ -116,8 +116,9 @@ function deleteFromInbox(entries: MentionEntry[]) {
         while (inboxQueue.length) {
             const id = inboxQueue.shift()!;
             try {
-                await apiDelete(`/users/@me/mentions/${id}`);
+                await deleteRecentMention(id);
             } catch (e: any) {
+                logger.error("suppression de la boîte de réception", e);
                 if (e?.status === 429) {
                     inboxQueue.unshift(id);
                     await new Promise<void>(r => setTimeout(() => r(), (e.body?.retry_after ?? 2) * 1000));

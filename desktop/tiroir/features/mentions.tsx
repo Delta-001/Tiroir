@@ -5,6 +5,7 @@
  */
 
 import { Logger } from "@utils/Logger";
+import { findByPropsLazy } from "@webpack";
 import { Alerts, ChannelStore, FluxDispatcher, GuildMemberStore, GuildRoleStore, GuildStore, IconUtils, moment, NavigationRouter, ReadStateStore, RelationshipStore, RestAPI, showToast, useEffect, useRef, UserGuildSettingsStore, UserStore, useState, useStateFromStores } from "@webpack/common";
 
 import { channelLabel, channelPath, RichText } from "../components/RichText";
@@ -13,6 +14,7 @@ import { cl, useHorizontalWheel } from "../utils";
 import type { PanelFeature } from ".";
 
 const logger = new Logger("Tiroir");
+const RecentMentions = findByPropsLazy("deleteRecentMention");
 
 /** Texte d'un message, ou résumé s'il n'en a pas : pièce jointe, sticker ou intégration (format API ou objet Discord) */
 export function contentOf(message: any) {
@@ -129,8 +131,11 @@ function deleteFromInbox(entries: MentionEntry[]) {
         while (inboxQueue.length) {
             const id = inboxQueue.shift()!;
             try {
-                await RestAPI.del({ url: `/users/@me/mentions/${id}` });
+                // Fonction de la boîte de réception de Discord : supprime côté serveur et met l'affichage à jour
+                if (RecentMentions.deleteRecentMention) RecentMentions.deleteRecentMention(id);
+                else await RestAPI.del({ url: `/users/@me/mentions/${id}` });
             } catch (e: any) {
+                logger.error("suppression de la boîte de réception", e);
                 // Limite atteinte : on réessaie après le délai indiqué
                 if (e?.status === 429) {
                     inboxQueue.unshift(id);

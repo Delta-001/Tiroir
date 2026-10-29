@@ -88,6 +88,15 @@ export async function apiGet(url: string, query?: Record<string, unknown>) {
     return api.get({ url, query });
 }
 
+const recentMentions = lazy(() => findByProps("deleteRecentMention"));
+
+/** Fonction de la boîte de réception de Discord : supprime la mention côté serveur et met l'affichage à jour */
+export async function deleteRecentMention(messageId: string) {
+    const actions = recentMentions();
+    if (actions?.deleteRecentMention) return actions.deleteRecentMention(messageId);
+    return apiDelete(`/users/@me/mentions/${messageId}`);
+}
+
 export async function apiDelete(url: string) {
     const api = http();
     if (!api) throw new Error("API REST indisponible");
