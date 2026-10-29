@@ -9,7 +9,7 @@ import type { MouseEvent } from "react";
 
 import { FEATURES, getFeature, getTabName } from "../features";
 import { getHub, newId, Tab, updateHub, useHub } from "../store";
-import { cl, scrollHorizontally } from "../utils";
+import { cl, useHorizontalWheel } from "../utils";
 import { HandleProps, moveItem, Sortable } from "./Sortable";
 
 /** Ajoute un onglet de la fonctionnalité donnée, l'active et le renvoie */
@@ -140,6 +140,7 @@ export function SegmentedControl() {
     const [renaming, setRenaming] = useState<string | null>(null);
     const segments = useRef(new Map<string, HTMLElement>());
     const bar = useRef<HTMLDivElement>(null);
+    useHorizontalWheel(bar);
     const [indicator, setIndicator] = useState<{ left: number; width: number; } | null>(null);
 
     // Place l'indicateur glissant sous l'onglet actif (mesuré par rapport à la barre, qui peut défiler)
@@ -154,7 +155,7 @@ export function SegmentedControl() {
 
     return (
         <div className={cl("segmented-wrap")}>
-            <div ref={bar} className={cl("segmented")} role="tablist" onWheel={scrollHorizontally}>
+            <div ref={bar} className={cl("segmented")} role="tablist">
                 {indicator && <div className={cl("segment-indicator")} style={{ transform: `translateX(${indicator.left}px)`, width: indicator.width }} />}
                 <Sortable
                     className={cl("segments")}

@@ -1,4 +1,4 @@
-import { apiGet, bulkAck, hideSheet, logger, moment, navigate, React, RN, showConfirmationAlert, showToast, Stores, useStores } from "../discord";
+import { apiDelete, apiGet, bulkAck, hideSheet, logger, moment, navigate, React, RN, showConfirmationAlert, showToast, Stores, useStores } from "../discord";
 import { hub, MAX_CHANNEL_MESSAGES, MAX_MENTIONS, MentionEntry, MentionKind, useHub } from "../store";
 import { styles } from "../theme";
 import { avatarUrl, Empty, Row, RowAction } from "../ui/common";
@@ -101,11 +101,40 @@ function ackOnDiscord(entries: MentionEntry[], toLatest = false) {
     bulkAck(channels);
 }
 
+const inboxQueue: string[] = [];
+let inboxBusy = false;
+
+/**
+ * Retire les mentions de la boîte de réception de Discord, comme sa croix « Supprimer ».
+ * Une requête à la fois, espacées, pour respecter les limites de l'API.
+ */
+function deleteFromInbox(entries: MentionEntry[]) {
+    inboxQueue.push(...entries.filter(e => e.kind !== "message").map(e => e.id));
+    if (inboxBusy) return;
+    inboxBusy = true;
+    (async () => {
+        while (inboxQueue.length) {
+            const id = inboxQueue.shift()!;
+            try {
+                await apiDelete(`/users/@me/mentions/${id}`);
+            } catch (e: any) {
+                if (e?.status === 429) {
+                    inboxQueue.unshift(id);
+                    await new Promise<void>(r => setTimeout(() => r(), (e.body?.retry_after ?? 2) * 1000));
+                }
+            }
+            await new Promise<void>(r => setTimeout(() => r(), 300));
+        }
+        inboxBusy = false;
+    })();
+}
+
 function dismiss(entries: MentionEntry[], toLatest = false) {
     const ids = new Set(entries.map(e => e.id));
     hub.mentions = hub.mentions.filter(m => !ids.has(m.id));
     try {
         ackOnDiscord(entries, toLatest);
+        deleteFromInbox(entries);
     } catch (e) {
         logger.error("acquittement", e);
     }

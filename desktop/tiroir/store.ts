@@ -72,6 +72,8 @@ export interface HubData {
     mentionsSeenAt: number;
     /** Largeur choisie en tirant le bord du panneau ; sinon, celle de la barre remplacée */
     panelWidth?: number;
+    /** Fond de la barre native remplacée, mémorisé pour suivre le thème même quand elle est fermée */
+    panelLook?: { backgroundColor: string; backgroundImage: string; borderLeft: string; };
 }
 
 export const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);

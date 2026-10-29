@@ -10,7 +10,22 @@ import { Button, Forms, useEffect, useState } from "@webpack/common";
 
 import type { UpdateStatus } from "../native";
 
-const Native = VencordNative.pluginHelpers.Tiroir as PluginNative<typeof import("../native")>;
+const Native = VencordNative.pluginHelpers.Tiroir as PluginNative<typeof import("../native")> | undefined;
+
+const RESTART_NEEDED = "Quitte complètement Discord (pas seulement Ctrl+R), puis rouvre-le pour activer la mise à jour en un clic.";
+
+/** Appelle la partie native, avec un délai maximal : elle n'existe qu'après un vrai redémarrage de Discord */
+async function callNative(fn: "checkForUpdates" | "update", timeoutMs: number): Promise<UpdateStatus> {
+    if (!Native?.[fn]) return { ok: false, error: RESTART_NEEDED };
+    try {
+        return await Promise.race([
+            Native[fn](),
+            new Promise<UpdateStatus>(resolve => setTimeout(() => resolve({ ok: false, error: "Pas de réponse : vérifie ta connexion, puis réessaie." }), timeoutMs))
+        ]);
+    } catch {
+        return { ok: false, error: RESTART_NEEDED };
+    }
+}
 
 type Phase = "checking" | "idle" | "updating" | "updated";
 
@@ -21,13 +36,13 @@ export function UpdateSection() {
 
     const check = async () => {
         setPhase("checking");
-        setStatus(await Native.checkForUpdates());
+        setStatus(await callNative("checkForUpdates", 30_000));
         setPhase("idle");
     };
 
     const update = async () => {
         setPhase("updating");
-        const result = await Native.update();
+        const result = await callNative("update", 10 * 60_000);
         setStatus(result);
         setPhase(result.ok ? "updated" : "idle");
     };

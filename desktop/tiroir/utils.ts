@@ -5,10 +5,25 @@
  */
 
 import { classNameFactory } from "@api/Styles";
+import { useEffect } from "@webpack/common";
 
 export const cl = classNameFactory("vc-hub-");
 
-/** Molette verticale → défilement horizontal (souris sans défilement latéral, sous Windows notamment) */
-export function scrollHorizontally(e: { deltaX: number; deltaY: number; currentTarget: HTMLElement; }) {
-    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) e.currentTarget.scrollLeft += e.deltaY;
+/**
+ * Molette verticale → défilement horizontal (souris sans défilement latéral, sous Windows notamment).
+ * Écouteur natif non passif : celui de React ne peut pas empêcher le panneau de défiler aussi vers le bas.
+ */
+export function useHorizontalWheel(ref: { current: HTMLElement | null; }) {
+    useEffect(() => {
+        const el = ref.current;
+        if (!el) return;
+        const onWheel = (e: WheelEvent) => {
+            if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            el.scrollLeft += e.deltaY;
+        };
+        el.addEventListener("wheel", onWheel, { passive: false });
+        return () => el.removeEventListener("wheel", onWheel);
+    }, []);
 }

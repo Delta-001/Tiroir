@@ -5,11 +5,11 @@
  */
 
 import { Logger } from "@utils/Logger";
-import { Alerts, ChannelStore, FluxDispatcher, GuildMemberStore, GuildRoleStore, GuildStore, IconUtils, moment, NavigationRouter, ReadStateStore, RelationshipStore, RestAPI, showToast, useEffect, UserGuildSettingsStore, UserStore, useState, useStateFromStores } from "@webpack/common";
+import { Alerts, ChannelStore, FluxDispatcher, GuildMemberStore, GuildRoleStore, GuildStore, IconUtils, moment, NavigationRouter, ReadStateStore, RelationshipStore, RestAPI, showToast, useEffect, useRef, UserGuildSettingsStore, UserStore, useState, useStateFromStores } from "@webpack/common";
 
 import { channelLabel, channelPath, RichText } from "../components/RichText";
 import { getHub, MAX_CHANNEL_MESSAGES, MAX_MENTIONS, MentionEntry, MentionKind, updateHub, useHub } from "../store";
-import { cl, scrollHorizontally } from "../utils";
+import { cl, useHorizontalWheel } from "../utils";
 import type { PanelFeature } from ".";
 
 const logger = new Logger("Tiroir");
@@ -114,12 +114,42 @@ function ackOnDiscord(entries: MentionEntry[], toLatest = false) {
     if (channels.length) FluxDispatcher.dispatch({ type: "BULK_ACK", context: "APP", channels });
 }
 
-/** Retire des entrées du panneau et les marque comme lues dans Discord */
+const inboxQueue: string[] = [];
+let inboxBusy = false;
+
+/**
+ * Retire les mentions de la boîte de réception de Discord (la cloche), comme sa croix « Supprimer ».
+ * Une requête à la fois, espacées, pour respecter les limites de l'API.
+ */
+function deleteFromInbox(entries: MentionEntry[]) {
+    inboxQueue.push(...entries.filter(e => e.kind !== "message").map(e => e.id));
+    if (inboxBusy) return;
+    inboxBusy = true;
+    (async () => {
+        while (inboxQueue.length) {
+            const id = inboxQueue.shift()!;
+            try {
+                await RestAPI.del({ url: `/users/@me/mentions/${id}` });
+            } catch (e: any) {
+                // Limite atteinte : on réessaie après le délai indiqué
+                if (e?.status === 429) {
+                    inboxQueue.unshift(id);
+                    await new Promise(r => setTimeout(r, (e.body?.retry_after ?? 2) * 1000));
+                }
+            }
+            await new Promise(r => setTimeout(r, 300));
+        }
+        inboxBusy = false;
+    })();
+}
+
+/** Retire des entrées du panneau, les marque comme lues dans Discord et les supprime de sa boîte de réception */
 function dismissMentions(entries: MentionEntry[], toLatest = false) {
     const ids = new Set(entries.map(e => e.id));
     updateHub(d => ({ mentions: d.mentions.filter(m => !ids.has(m.id)) }));
     try {
         ackOnDiscord(entries, toLatest);
+        deleteFromInbox(entries);
     } catch (e) {
         logger.error("Impossible de marquer comme lu dans Discord", e);
     }
@@ -212,6 +242,8 @@ function MentionsView() {
     const mentions = useHub(d => d.mentions);
     const [seenAt] = useState(() => getHub().mentionsSeenAt);
     const [filter, setFilter] = useState<Filter>("all");
+    const filtersRef = useRef<HTMLDivElement>(null);
+    useHorizontalWheel(filtersRef);
 
     // Ouvrir l'onglet marque les mentions comme vues ; celles d'avant restent surlignées jusqu'au prochain passage
     useEffect(() => {
@@ -224,7 +256,7 @@ function MentionsView() {
     return (
         <div className={cl("list")}>
             <div className={cl("toolbar")}>
-                <div className={cl("filters")} onWheel={scrollHorizontally}>
+                <div ref={filtersRef} className={cl("filters")}>
                     {FILTERS.map(f => (
                         <button key={f.id} className={cl("filter", filter === f.id && "filter-active")} title={f.title} onClick={() => setFilter(f.id)}>
                             {f.label}

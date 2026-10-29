@@ -88,6 +88,12 @@ export async function apiGet(url: string, query?: Record<string, unknown>) {
     return api.get({ url, query });
 }
 
+export async function apiDelete(url: string) {
+    const api = http();
+    if (!api) throw new Error("API REST indisponible");
+    return api.del({ url });
+}
+
 const requestedUsers = new Set<string>();
 /** Récupère un utilisateur absent du cache local, une seule fois par id */
 export function requestUser(id: string) {

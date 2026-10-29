@@ -103,7 +103,7 @@ const settings = definePluginSettings({
 export default definePlugin({
     name: "Tiroir",
     description: "Bouton en haut à gauche qui ouvre un panneau à droite : salons épinglés, mentions reçues et notes.",
-    authors: [{ name: "Delta-001", id: 0n }],
+    authors: [{ name: "Delta-001", id: 689779342343143424n }],
     settings,
 
     patches: [

@@ -59,9 +59,21 @@ function setState(next: State) {
 function copyLook(el: HTMLElement) {
     const cs = getComputedStyle(el);
     if (cs.backgroundImage === "none" && cs.backgroundColor === "rgba(0, 0, 0, 0)") return;
-    host!.style.backgroundColor = cs.backgroundColor;
-    host!.style.backgroundImage = cs.backgroundImage;
-    host!.style.borderLeft = cs.borderLeftWidth === "0px" ? "none" : cs.borderLeft;
+    const look = {
+        backgroundColor: cs.backgroundColor,
+        backgroundImage: cs.backgroundImage,
+        borderLeft: cs.borderLeftWidth === "0px" ? "none" : cs.borderLeft
+    };
+    applyLook(look);
+    // Mémorisé : la liste des membres est fermée pendant que le panneau est ouvert, y compris au prochain démarrage
+    const saved = getHub().panelLook;
+    if (saved?.backgroundImage !== look.backgroundImage || saved?.backgroundColor !== look.backgroundColor) updateHub(() => ({ panelLook: look }));
+}
+
+function applyLook(look: { backgroundColor: string; backgroundImage: string; borderLeft: string; }) {
+    host!.style.backgroundColor = look.backgroundColor;
+    host!.style.backgroundImage = look.backgroundImage;
+    host!.style.borderLeft = look.borderLeft;
 }
 
 /** Place le panneau dans la vue actuelle et masque la barre latérale native. Renvoie true si une barre a été masquée. */
@@ -221,6 +233,8 @@ export function mountHost() {
     host = document.createElement("div");
     host.className = cl("host");
     host.dataset.state = "closed";
+    const look = getHub().panelLook;
+    if (look) applyLook(look);
     root = createRoot(host);
     render();
 
