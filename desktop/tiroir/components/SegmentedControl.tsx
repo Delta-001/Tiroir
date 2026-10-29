@@ -9,7 +9,7 @@ import type { MouseEvent } from "react";
 
 import { FEATURES, getFeature, getTabName } from "../features";
 import { getHub, newId, Tab, updateHub, useHub } from "../store";
-import { cl } from "../utils";
+import { cl, scrollHorizontally } from "../utils";
 import { HandleProps, moveItem, Sortable } from "./Sortable";
 
 /** Ajoute un onglet de la fonctionnalité donnée, l'active et le renvoie */
@@ -154,7 +154,7 @@ export function SegmentedControl() {
 
     return (
         <div className={cl("segmented-wrap")}>
-            <div ref={bar} className={cl("segmented")} role="tablist">
+            <div ref={bar} className={cl("segmented")} role="tablist" onWheel={scrollHorizontally}>
                 {indicator && <div className={cl("segment-indicator")} style={{ transform: `translateX(${indicator.left}px)`, width: indicator.width }} />}
                 <Sortable
                     className={cl("segments")}

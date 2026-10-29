@@ -9,7 +9,7 @@ import { Alerts, ChannelStore, FluxDispatcher, GuildMemberStore, GuildRoleStore,
 
 import { channelLabel, channelPath, RichText } from "../components/RichText";
 import { getHub, MAX_CHANNEL_MESSAGES, MAX_MENTIONS, MentionEntry, MentionKind, updateHub, useHub } from "../store";
-import { cl } from "../utils";
+import { cl, scrollHorizontally } from "../utils";
 import type { PanelFeature } from ".";
 
 const logger = new Logger("Tiroir");
@@ -94,7 +94,7 @@ const compareIds = (a: string, b: string) => {
  * Marque les salons comme lus dans Discord jusqu'aux messages retirés, comme « Marquer comme lu » :
  * la pastille de mention du salon et du serveur disparaît. La position de lecture n'est jamais reculée.
  */
-function ackOnDiscord(entries: MentionEntry[]) {
+function ackOnDiscord(entries: MentionEntry[], toLatest = false) {
     const newestByChannel = new Map<string, string>();
     for (const e of entries) {
         const newest = newestByChannel.get(e.channelId);
@@ -102,8 +102,10 @@ function ackOnDiscord(entries: MentionEntry[]) {
     }
 
     const channels: { channelId: string; messageId: string; readStateType: number; }[] = [];
-    for (const [channelId, messageId] of newestByChannel) {
+    for (const [channelId, newest] of newestByChannel) {
         if (!ReadStateStore.hasUnreadOrMentions(channelId)) continue;
+        // « Tout effacer » marque le salon lu jusqu'à son dernier message, comme « Marquer comme lu »
+        const messageId = (toLatest && ReadStateStore.lastMessageId(channelId)) || newest;
         const acked = ReadStateStore.ackMessageId(channelId);
         if (acked && compareIds(acked, messageId) >= 0) continue;
         channels.push({ channelId, messageId, readStateType: 0 });
@@ -113,11 +115,11 @@ function ackOnDiscord(entries: MentionEntry[]) {
 }
 
 /** Retire des entrées du panneau et les marque comme lues dans Discord */
-function dismissMentions(entries: MentionEntry[]) {
+function dismissMentions(entries: MentionEntry[], toLatest = false) {
     const ids = new Set(entries.map(e => e.id));
     updateHub(d => ({ mentions: d.mentions.filter(m => !ids.has(m.id)) }));
     try {
-        ackOnDiscord(entries);
+        ackOnDiscord(entries, toLatest);
     } catch (e) {
         logger.error("Impossible de marquer comme lu dans Discord", e);
     }
@@ -222,7 +224,7 @@ function MentionsView() {
     return (
         <div className={cl("list")}>
             <div className={cl("toolbar")}>
-                <div className={cl("filters")}>
+                <div className={cl("filters")} onWheel={scrollHorizontally}>
                     {FILTERS.map(f => (
                         <button key={f.id} className={cl("filter", filter === f.id && "filter-active")} title={f.title} onClick={() => setFilter(f.id)}>
                             {f.label}
@@ -240,10 +242,10 @@ function MentionsView() {
                     title="Tout effacer et marquer comme lu"
                     onClick={() => mentions.length && Alerts.show({
                         title: "Effacer les notifications",
-                        body: "Retirer toutes les notifications de cette liste ? Leurs salons seront aussi marqués comme lus dans Discord.",
+                        body: "Retirer toutes les notifications ? Leurs salons seront marqués comme lus dans Discord, jusqu'à leur dernier message.",
                         confirmText: "Effacer",
                         cancelText: "Annuler",
-                        onConfirm: () => dismissMentions(getHub().mentions)
+                        onConfirm: () => dismissMentions(getHub().mentions, true)
                     })}
                 >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

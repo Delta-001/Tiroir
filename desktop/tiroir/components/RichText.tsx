@@ -6,10 +6,10 @@
 
 import { openUserProfile } from "@utils/discord";
 import { Channel, Role } from "@vencord/discord-types";
-import { ChannelStore, GuildRoleStore, GuildStore, NavigationRouter, UserStore, UserUtils, useStateFromStores } from "@webpack/common";
+import { ChannelStore, GuildRoleStore, GuildStore, NavigationRouter, showToast, UserStore, UserUtils, useStateFromStores } from "@webpack/common";
 import type { ReactNode } from "react";
 
-import { useImage } from "../images";
+import { copyImage, useImage } from "../images";
 import { cl } from "../utils";
 
 const TOKEN_RE = /<@!?(\d{15,21})>|<@&(\d{15,21})>|<#(\d{15,21})>|<(a?):(\w{2,32}):(\d{15,21})>|(https?:\/\/[^\s<]+[^\s<.,:;"')\]!?])|\[img:([a-z0-9]+)\]/g;
@@ -96,7 +96,23 @@ function ChannelMention({ id }: { id: string; }) {
 function NoteImage({ id }: { id: string; }) {
     const src = useImage(id);
     if (!src) return <span className={cl("image-missing")}>[image introuvable]</span>;
-    return <img className={cl("note-image")} src={src} alt="" />;
+    return (
+        <span className={cl("note-image-wrap")}>
+            <img className={cl("note-image")} src={src} alt="" />
+            <button
+                className={cl("note-image-copy")}
+                title="Copier l'image (à coller dans un message, une preuve de report…)"
+                onClick={e => {
+                    e.stopPropagation();
+                    copyImage(id)
+                        .then(() => showToast({ text: "Image copiée" }))
+                        .catch(() => showToast({ text: "Impossible de copier l'image", variant: "critical" }));
+                }}
+            >
+                Copier
+            </button>
+        </span>
+    );
 }
 
 /** Surligne les occurrences de `query` dans un texte brut (sans tenir compte de la casse) */

@@ -2,6 +2,7 @@ import { apiGet, bulkAck, hideSheet, logger, moment, navigate, React, RN, showCo
 import { hub, MAX_CHANNEL_MESSAGES, MAX_MENTIONS, MentionEntry, MentionKind, useHub } from "../store";
 import { styles } from "../theme";
 import { avatarUrl, Empty, Row, RowAction } from "../ui/common";
+import { ScrollEndContext } from "../ui/Sortable";
 import { channelLabel, channelPath, RichText } from "../ui/RichText";
 import type { PanelFeature } from ".";
 
@@ -81,15 +82,17 @@ const compareIds = (a: string, b: string) => {
 };
 
 /** Marque les salons comme lus dans Discord jusqu'aux messages retirés ; la position de lecture ne recule jamais */
-function ackOnDiscord(entries: MentionEntry[]) {
+function ackOnDiscord(entries: MentionEntry[], toLatest = false) {
     const newest = new Map<string, string>();
     for (const e of entries) {
         const n = newest.get(e.channelId);
         if (!n || compareIds(e.id, n) > 0) newest.set(e.channelId, e.id);
     }
     const channels: { channelId: string; messageId: string; }[] = [];
-    for (const [channelId, messageId] of newest) {
+    for (const [channelId, newestId] of newest) {
         const rs = Stores.ReadState();
+        // « Tout effacer » marque le salon lu jusqu'à son dernier message, comme « Marquer comme lu »
+        const messageId = (toLatest && rs?.lastMessageId?.(channelId)) || newestId;
         if (!rs?.hasUnreadOrMentions?.(channelId) && !rs?.hasUnread?.(channelId) && !rs?.getMentionCount?.(channelId)) continue;
         const acked = rs?.ackMessageId?.(channelId);
         if (acked && compareIds(acked, messageId) >= 0) continue;
@@ -98,13 +101,36 @@ function ackOnDiscord(entries: MentionEntry[]) {
     bulkAck(channels);
 }
 
-function dismiss(entries: MentionEntry[]) {
+function dismiss(entries: MentionEntry[], toLatest = false) {
     const ids = new Set(entries.map(e => e.id));
     hub.mentions = hub.mentions.filter(m => !ids.has(m.id));
     try {
-        ackOnDiscord(entries);
+        ackOnDiscord(entries, toLatest);
     } catch (e) {
         logger.error("acquittement", e);
+    }
+}
+
+const PAGE_SIZE = 50;
+let loadingOlder = false;
+let reachedEnd = false;
+
+/** Charge la page de mentions précédant la plus ancienne connue (défilement infini) */
+async function loadOlder(onChange: () => void) {
+    if (loadingOlder || reachedEnd || hub.mentions.length >= MAX_MENTIONS) return;
+    loadingOlder = true;
+    onChange();
+    try {
+        const oldest = hub.mentions.filter(m => m.kind !== "message").slice(-1)[0];
+        const { body } = await apiGet("/users/@me/mentions", { limit: PAGE_SIZE, roles: true, everyone: true, ...(oldest && { before: oldest.id }) });
+        const page = body as any[];
+        addMentions(page.map(m => toMentionEntry(m, true)).filter(Boolean) as MentionEntry[]);
+        if (page.length < PAGE_SIZE) reachedEnd = true;
+    } catch (e) {
+        logger.error("mentions plus anciennes", e);
+    } finally {
+        loadingOlder = false;
+        onChange();
     }
 }
 
@@ -192,6 +218,15 @@ function MentionsView() {
 
     const shown = mentions.filter(m => filter === "all" || m.kind === filter || (filter === "everyone" && m.kind === "here"));
 
+    // Défilement infini : arrivé en bas de la liste, on charge les mentions plus anciennes
+    const [, refresh] = React.useReducer((x: number) => x + 1, 0);
+    const { setOnEnd } = React.useContext(ScrollEndContext);
+    React.useEffect(() => {
+        setOnEnd(() => loadOlder(refresh));
+        if (!mentions.some(m => m.kind !== "message")) loadOlder(refresh);
+        return () => setOnEnd(undefined);
+    }, []);
+
     return (
         <RN.View>
             <RN.View style={styles.toolbar}>
@@ -208,10 +243,10 @@ function MentionsView() {
                     accessibilityLabel="Tout effacer et marquer comme lu"
                     onPress={() => mentions.length && showConfirmationAlert({
                         title: "Effacer les notifications",
-                        content: "Retirer toutes les notifications de cette liste ? Leurs salons seront aussi marqués comme lus dans Discord.",
+                        content: "Retirer toutes les notifications ? Leurs salons seront marqués comme lus dans Discord, jusqu'à leur dernier message.",
                         confirmText: "Effacer",
                         cancelText: "Annuler",
-                        onConfirm: () => dismiss(hub.mentions)
+                        onConfirm: () => dismiss(hub.mentions, true)
                     })}
                 />
             </RN.View>
@@ -219,6 +254,11 @@ function MentionsView() {
                 <Empty>Rien pour l'instant. Les mentions et les messages des salons en « Tous les messages » s'ajoutent ici automatiquement ; ↻ charge les mentions récentes.</Empty>
             )}
             {shown.map(m => <MentionRow key={m.id} entry={m} unseen={m.timestamp > seenAt} />)}
+            {shown.length > 0 && (
+                <RN.Text style={[styles.empty, { paddingVertical: 14 }]}>
+                    {loadingOlder ? "Chargement des mentions plus anciennes…" : reachedEnd ? "Toutes les mentions sont chargées." : " "}
+                </RN.Text>
+            )}
         </RN.View>
     );
 }

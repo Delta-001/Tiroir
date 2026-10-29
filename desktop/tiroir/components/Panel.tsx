@@ -7,6 +7,7 @@
 import ErrorBoundary from "@components/ErrorBoundary";
 
 import { getFeature } from "../features";
+import { resetWidth, startResize } from "../host";
 import { isHubLoaded, setPanelOpen, useHub } from "../store";
 import { cl } from "../utils";
 import { SegmentedControl } from "./SegmentedControl";
@@ -34,6 +35,12 @@ export function Panel({ visible }: { visible: boolean; }) {
 
     return (
         <div className={cl("panel")}>
+            <div
+                className={cl("resize-handle")}
+                title="Tirer pour redimensionner, double-clic pour la largeur automatique"
+                onPointerDown={e => startResize(e.nativeEvent)}
+                onDoubleClick={resetWidth}
+            />
             {visible && loaded && (
                 <>
                     <header className={cl("header")}>

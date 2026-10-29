@@ -7,7 +7,7 @@ declare const vendetta: any;
 
 const { createStorage, createMMKVBackend, wrapSync, awaitSyncWrapper, useProxy } = vendetta.storage;
 
-export const MAX_MENTIONS = 300;
+export const MAX_MENTIONS = 2000;
 export const MAX_CHANNEL_MESSAGES = 150;
 
 export interface Tab {

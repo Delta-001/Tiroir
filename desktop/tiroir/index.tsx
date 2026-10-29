@@ -7,13 +7,15 @@
 import "./styles.css";
 
 import { NavContextMenuPatchCallback } from "@api/ContextMenu";
+import { definePluginSettings } from "@api/Settings";
 import ErrorBoundary from "@components/ErrorBoundary";
-import definePlugin from "@utils/types";
+import definePlugin, { OptionType } from "@utils/types";
 import { Channel, Guild, Message, User } from "@vencord/discord-types";
 import { ChannelStore, Menu, showToast } from "@webpack/common";
 
 import { addTab } from "./components/SegmentedControl";
 import { TitleBarButton } from "./components/TitleBarButton";
+import { UpdateSection } from "./components/UpdateSection";
 import { addNewFeatureTabs, getTabName } from "./features";
 import { addMentions, toMentionEntry } from "./features/mentions";
 import { toggleMessagePin } from "./features/messages";
@@ -87,10 +89,22 @@ const userMenu: NavContextMenuPatchCallback = (children, { user }: { user?: User
     );
 };
 
+const settings = definePluginSettings({
+    updates: {
+        type: OptionType.COMPONENT,
+        component: () => (
+            <ErrorBoundary noop>
+                <UpdateSection />
+            </ErrorBoundary>
+        )
+    }
+});
+
 export default definePlugin({
     name: "Tiroir",
     description: "Bouton en haut à gauche qui ouvre un panneau à droite : salons épinglés, mentions reçues et notes.",
     authors: [{ name: "Delta-001", id: 0n }],
+    settings,
 
     patches: [
         {

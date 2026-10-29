@@ -8,7 +8,7 @@ import { showToast, useEffect, useRef, useState } from "@webpack/common";
 import type { ClipboardEvent, KeyboardEvent } from "react";
 
 import { countMatches, RichText } from "../components/RichText";
-import { addImage } from "../images";
+import { addImage, getImage, IMAGE_TOKEN_RE } from "../images";
 import { getHub, Tab, updateHub, useHub } from "../store";
 import { cl } from "../utils";
 import type { PanelFeature } from ".";
@@ -44,21 +44,126 @@ function SearchBar({ query, setQuery, count, current, onStep, onClose }: {
     );
 }
 
+/** Texte de note → nœuds de l'éditeur : les repères [img:id] deviennent de vraies images */
+function toNodes(text: string): Node[] {
+    const nodes: Node[] = [];
+    let last = 0;
+    for (const m of text.matchAll(IMAGE_TOKEN_RE)) {
+        if (m.index! > last) nodes.push(document.createTextNode(text.slice(last, m.index)));
+        nodes.push(imageNode(m[1]));
+        last = m.index! + m[0].length;
+    }
+    if (last < text.length || !nodes.length) nodes.push(document.createTextNode(text.slice(last)));
+    return nodes;
+}
+
+function imageNode(id: string) {
+    const img = document.createElement("img");
+    img.src = getImage(id) ?? "";
+    img.dataset.imageId = id;
+    img.className = cl("note-image", "note-image-editing");
+    img.contentEditable = "false";
+    return img;
+}
+
+/** Nœuds de l'éditeur → texte de note : chaque image redevient son repère [img:id] */
+function serialize(root: Node): string {
+    let out = "";
+    root.childNodes.forEach(node => {
+        if (node.nodeType === Node.TEXT_NODE) out += node.textContent;
+        else if (node instanceof HTMLImageElement && node.dataset.imageId) out += `[img:${node.dataset.imageId}]`;
+        else if (node instanceof HTMLBRElement) out += "\n";
+        else if (node instanceof HTMLElement) out += (out && !out.endsWith("\n") && node.tagName === "DIV" ? "\n" : "") + serialize(node);
+    });
+    return out;
+}
+
+/** Insère des nœuds à l'emplacement du curseur et place le curseur après eux */
+function insertAtCaret(root: HTMLElement, nodes: Node[]) {
+    const selection = getSelection();
+    let range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+    if (!range || !root.contains(range.startContainer)) {
+        range = document.createRange();
+        range.selectNodeContents(root);
+        range.collapse(false);
+    }
+    range.deleteContents();
+    for (const node of nodes) {
+        range.insertNode(node);
+        range.setStartAfter(node);
+    }
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+}
+
+/** Éditeur de note : texte brut et vraies images (collées avec Cmd/Ctrl+V, supprimées avec Retour arrière) */
+function NoteEditor({ text, onChange, onDone, onKeyDown }: { text: string; onChange(v: string): void; onDone(): void; onKeyDown(e: KeyboardEvent): void; }) {
+    const ref = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const root = ref.current!;
+        root.replaceChildren(...toNodes(text));
+        root.focus();
+        const range = document.createRange();
+        range.selectNodeContents(root);
+        range.collapse(false);
+        getSelection()?.removeAllRanges();
+        getSelection()?.addRange(range);
+    }, []);
+
+    const sync = () => onChange(serialize(ref.current!));
+
+    const onPaste = async (e: ClipboardEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        const files = [...e.clipboardData.items].filter(i => i.type.startsWith("image/")).map(i => i.getAsFile()).filter(Boolean) as File[];
+        if (!files.length) {
+            // Texte seul, sans la mise en forme de la source
+            document.execCommand("insertText", false, e.clipboardData.getData("text/plain"));
+            return;
+        }
+        try {
+            const tokens = await Promise.all(files.map(addImage));
+            const ids = tokens.map(t => t.slice(5, -1));
+            insertAtCaret(ref.current!, ids.flatMap(id => [imageNode(id), document.createTextNode("\n")]));
+            sync();
+        } catch {
+            showToast({ text: "Impossible d'ajouter cette image", variant: "critical" });
+        }
+    };
+
+    return (
+        <div
+            ref={ref}
+            className={cl("note-editor", "note-rich-editor")}
+            contentEditable
+            suppressContentEditableWarning
+            spellCheck
+            data-placeholder="Écris ta note… (Cmd/Ctrl+V pour coller une image)"
+            onInput={sync}
+            onPaste={onPaste}
+            onBlur={() => { sync(); onDone(); }}
+            onKeyDown={e => {
+                if (e.key === "Escape") e.currentTarget.blur();
+                // Entrée insère un vrai retour à la ligne (et non un bloc <div>)
+                if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    document.execCommand("insertText", false, "\n");
+                }
+                onKeyDown(e);
+            }}
+        />
+    );
+}
+
 function NoteView({ tab }: { tab: Tab; }) {
     const text = useHub(d => d.notes[tab.id] ?? "");
     const [editing, setEditing] = useState(false);
     const [searching, setSearching] = useState(false);
     const [query, setQuery] = useState("");
     const [current, setCurrent] = useState(0);
-    const ref = useRef<HTMLTextAreaElement>(null);
     const preview = useRef<HTMLDivElement>(null);
     const count = searching ? countMatches(text, query) : 0;
-
-    useEffect(() => {
-        if (!editing || !ref.current) return;
-        ref.current.focus();
-        ref.current.setSelectionRange(text.length, text.length);
-    }, [editing]);
 
     // Met en évidence le résultat courant et le fait défiler à l'écran
     useEffect(() => {
@@ -74,24 +179,6 @@ function NoteView({ tab }: { tab: Tab; }) {
     const openSearch = () => { setEditing(false); setSearching(true); };
     const closeSearch = () => { setSearching(false); setQuery(""); };
 
-    // Coller une image : elle est enregistrée, et son repère inséré à l'emplacement du curseur
-    const onPaste = async (e: ClipboardEvent<HTMLTextAreaElement>) => {
-        const files = [...e.clipboardData.items].filter(i => i.type.startsWith("image/")).map(i => i.getAsFile()).filter(Boolean) as File[];
-        if (!files.length) return;
-        e.preventDefault();
-        const area = e.currentTarget;
-        const { selectionStart, selectionEnd } = area;
-        try {
-            const tokens = await Promise.all(files.map(addImage));
-            const insert = (selectionStart > 0 && text[selectionStart - 1] !== "\n" ? "\n" : "") + tokens.join("\n") + "\n";
-            const next = text.slice(0, selectionStart) + insert + text.slice(selectionEnd);
-            setText(next);
-            requestAnimationFrame(() => area.setSelectionRange(selectionStart + insert.length, selectionStart + insert.length));
-        } catch {
-            showToast({ text: "Impossible d'ajouter cette image", variant: "critical" });
-        }
-    };
-
     const onKeyDown = (e: KeyboardEvent) => {
         if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
             e.preventDefault();
@@ -105,22 +192,7 @@ function NoteView({ tab }: { tab: Tab; }) {
     );
 
     if (editing) {
-        return (
-            <textarea
-                ref={ref}
-                className={cl("note-editor")}
-                value={text}
-                spellCheck
-                placeholder="Écris ta note… (Cmd/Ctrl+V pour coller une image)"
-                onChange={e => setText(e.currentTarget.value)}
-                onPaste={onPaste}
-                onBlur={() => setEditing(false)}
-                onKeyDown={e => {
-                    if (e.key === "Escape") e.currentTarget.blur();
-                    onKeyDown(e);
-                }}
-            />
-        );
+        return <NoteEditor text={text} onChange={setText} onDone={() => setEditing(false)} onKeyDown={onKeyDown} />;
     }
 
     return (

@@ -70,6 +70,8 @@ export interface HubData {
     seenFeatures?: string[];
     /** Horodatage de la dernière consultation de l'onglet Mentions */
     mentionsSeenAt: number;
+    /** Largeur choisie en tirant le bord du panneau ; sinon, celle de la barre remplacée */
+    panelWidth?: number;
 }
 
 export const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);

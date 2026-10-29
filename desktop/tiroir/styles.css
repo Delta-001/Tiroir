@@ -878,3 +878,86 @@
     font-size: 12px;
     font-style: italic;
 }
+
+/* Redimensionnement par le bord gauche */
+
+.vc-hub-panel {
+    position: relative;
+}
+
+.vc-hub-resize-handle {
+    position: absolute;
+    z-index: 10;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 6px;
+    cursor: col-resize;
+    transition: box-shadow 120ms ease;
+}
+
+.vc-hub-resize-handle:hover,
+.vc-hub-resizing .vc-hub-resize-handle {
+    box-shadow: inset 2px 0 0 var(--vc-hub-brand);
+}
+
+.vc-hub-host.vc-hub-resizing {
+    transition: none;
+}
+
+.vc-hub-resizing-cursor,
+.vc-hub-resizing-cursor * {
+    cursor: col-resize !important;
+    user-select: none !important;
+}
+
+/* Éditeur de note avec de vraies images */
+
+.vc-hub-note-rich-editor {
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    cursor: text;
+}
+
+.vc-hub-note-rich-editor:empty::before {
+    content: attr(data-placeholder);
+    color: var(--vc-hub-muted);
+    pointer-events: none;
+}
+
+.vc-hub-note-image-editing {
+    outline: 2px solid transparent;
+    transition: outline-color 120ms ease;
+}
+
+.vc-hub-note-image-editing:hover {
+    outline-color: var(--vc-hub-border);
+}
+
+/* Image dans une note, avec le bouton « Copier » au survol */
+
+.vc-hub-note-image-wrap {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+}
+
+.vc-hub-note-image-copy {
+    position: absolute;
+    top: 12px;
+    right: 6px;
+    padding: 3px 8px;
+    border: none;
+    border-radius: 6px;
+    background: rgb(0 0 0 / 65%);
+    color: #fff;
+    font: inherit;
+    font-size: 12px;
+    opacity: 0;
+    cursor: pointer;
+    transition: opacity 120ms ease;
+}
+
+.vc-hub-note-image-wrap:hover .vc-hub-note-image-copy {
+    opacity: 1;
+}

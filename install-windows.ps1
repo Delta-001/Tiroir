@@ -60,6 +60,16 @@ if ($Mode -ne "inject") {
     } finally { Pop-Location }
 }
 
+# Configuration pour la mise à jour en un clic depuis les réglages du plugin
+if (Get-Command corepack -ErrorAction SilentlyContinue) { $PnpmCmd = @("corepack", "pnpm") }
+elseif (Get-Command pnpm -ErrorAction SilentlyContinue) { $PnpmCmd = @("pnpm") }
+else {
+    $version = (Get-Content (Join-Path $VencordDir "package.json") -Raw | ConvertFrom-Json).packageManager.Split("@")[1]
+    $PnpmCmd = @("npx", "--yes", "pnpm@$version")
+}
+$PathDirs = @("node", "git", "pnpm") | ForEach-Object { (Get-Command $_ -ErrorAction SilentlyContinue).Source } | Where-Object { $_ } | ForEach-Object { Split-Path $_ }
+@{ repoDir = $RepoDir; pnpm = $PnpmCmd; path = @($PathDirs) } | ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $VencordDir "tiroir-install.json")
+
 if ($Mode -ne "update") {
     Write-Host "→ Injection dans Discord : choisis ton Discord dans la liste."
     Push-Location $VencordDir

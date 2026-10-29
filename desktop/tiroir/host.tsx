@@ -10,7 +10,7 @@ import type { Root } from "react-dom/client";
 
 import { Panel } from "./components/Panel";
 import { closeDiscordSidebars, reopenDiscordSidebars } from "./layout";
-import { getHub, subscribeHub } from "./store";
+import { getHub, subscribeHub, updateHub } from "./store";
 import { cl } from "./utils";
 
 /*
@@ -103,7 +103,7 @@ function place(): boolean {
     // Nettoie les éléments que Discord a retirés entre-temps
     for (const el of hidden) if (!el.isConnected) hidden.delete(el);
 
-    host.style.setProperty("--vc-hub-width", `${width}px`);
+    host.style.setProperty("--vc-hub-width", `${getHub().panelWidth ?? width}px`);
     return replaced;
 }
 
@@ -153,6 +153,40 @@ function close() {
 function sync() {
     if (getHub().open) open();
     else close();
+}
+
+const MIN_WIDTH = 220;
+const MAX_WIDTH = 720;
+
+/** Redimensionnement en tirant le bord gauche du panneau ; la largeur est mémorisée */
+export function startResize(e: PointerEvent) {
+    if (!host || e.button !== 0) return;
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = host.getBoundingClientRect().width;
+    let next = startWidth;
+    host.classList.add(cl("resizing"));
+    document.documentElement.classList.add(cl("resizing-cursor"));
+
+    const onMove = (ev: PointerEvent) => {
+        next = Math.round(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth + startX - ev.clientX)));
+        host!.style.setProperty("--vc-hub-width", `${next}px`);
+    };
+    const onUp = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        host?.classList.remove(cl("resizing"));
+        document.documentElement.classList.remove(cl("resizing-cursor"));
+        updateHub(() => ({ panelWidth: next }));
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+}
+
+/** Double-clic sur le bord : revient à la largeur de la barre remplacée */
+export function resetWidth() {
+    updateHub(() => ({ panelWidth: undefined }));
+    host?.style.setProperty("--vc-hub-width", `${width}px`);
 }
 
 export function mountHost() {

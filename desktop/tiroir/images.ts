@@ -49,6 +49,27 @@ async function compress(file: Blob): Promise<string> {
     return canvas.toDataURL("image/webp", 0.85);
 }
 
+export const getImage = (id: string) => images[id];
+
+/** Copie une image dans le presse-papiers (en PNG, seul format d'image accepté par le presse-papiers) */
+export async function copyImage(id: string) {
+    const src = images[id];
+    if (!src) throw new Error("image introuvable");
+    const bitmap = await createImageBitmap(await (await fetch(src)).blob());
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    canvas.getContext("2d")!.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    const png: Blob = await new Promise((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error("conversion PNG")), "image/png"));
+    try {
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+    } catch {
+        // Secours : presse-papiers natif de Discord
+        (window as any).DiscordNative.clipboard.copyImage(new Uint8Array(await png.arrayBuffer()), "image.png");
+    }
+}
+
 /** Enregistre une image et renvoie son repère à insérer dans la note */
 export async function addImage(file: Blob): Promise<string> {
     const id = newId();

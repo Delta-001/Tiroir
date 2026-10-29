@@ -3,7 +3,7 @@ import { addTab, FEATURES, getFeature, getTabName, removeTab, renameTab } from "
 import { hub, Tab, useHub } from "../store";
 import { styles } from "../theme";
 import { moveItem } from "./Sortable";
-import { DragContext } from "./Sortable";
+import { DragContext, ScrollEndContext } from "./Sortable";
 
 type Toolbar = null | { kind: "tab"; id: string; } | { kind: "add"; };
 
@@ -105,6 +105,12 @@ export function HubSheet() {
     const { tabs, activeTab } = useHub();
     const [toolbar, setToolbar] = React.useState(null as Toolbar);
     const [dragging, setDragging] = React.useState(false);
+    const onEnd = React.useRef(undefined as (() => void) | undefined);
+    const scrollEnd = React.useMemo(() => ({ setOnEnd: (fn: (() => void) | undefined) => { onEnd.current = fn; } }), []);
+    const nearEnd = (e: any) => {
+        const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+        if (layoutMeasurement.height + contentOffset.y >= contentSize.height - 800) onEnd.current?.();
+    };
     const ActionSheet = UI.ActionSheet() ?? RN.View;
     // Défilement prévu pour les feuilles du bas de Discord (il partage le geste avec la feuille)
     const Scroll = UI.ScrollView();
@@ -126,11 +132,19 @@ export function HubSheet() {
                 </RN.Pressable>
             </RN.View>
             {toolbar && <ToolbarRow toolbar={toolbar} close={() => setToolbar(null)} />}
+            <ScrollEndContext.Provider value={scrollEnd}>
             <DragContext.Provider value={{ setDragging }}>
-                <Scroll style={{ height }} contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false} scrollEnabled={!dragging} keyboardShouldPersistTaps="handled">
+                <Scroll style={{ height }} contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false}
+                    scrollEnabled={!dragging}
+                    keyboardShouldPersistTaps="handled"
+                    // (onScroll est réservé au défilement de la feuille : on détecte la fin à la fin de chaque geste)
+                    onScrollEndDrag={nearEnd}
+                    onMomentumScrollEnd={nearEnd}
+                >
                     <ActiveTab />
                 </Scroll>
             </DragContext.Provider>
+            </ScrollEndContext.Provider>
         </ActionSheet>
     );
 }

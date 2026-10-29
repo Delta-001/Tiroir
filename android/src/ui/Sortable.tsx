@@ -9,6 +9,9 @@ export interface DragHandle {
     dragging: boolean;
 }
 
+/** Permet à un onglet d'être prévenu quand on arrive en bas du panneau (défilement infini) */
+export const ScrollEndContext = React.createContext({ setOnEnd: (_: (() => void) | undefined) => { } });
+
 /** Bloque le défilement du panneau pendant un glisser */
 export const DragContext = React.createContext({ setDragging: (_: boolean) => { } });
 

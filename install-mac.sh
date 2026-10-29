@@ -48,6 +48,15 @@ if [ "$MODE" != "inject" ]; then
     pnpm_run build
 fi
 
+# Configuration pour la mise à jour en un clic depuis les réglages du plugin
+if command -v corepack >/dev/null 2>&1; then PNPM_CMD='["corepack","pnpm"]'
+elif command -v pnpm >/dev/null 2>&1; then PNPM_CMD='["pnpm"]'
+else PNPM_CMD="[\"npx\",\"--yes\",\"pnpm@$(cd "$VENCORD_DIR" && node -p "require('./package.json').packageManager.split('@')[1]")\"]"
+fi
+node -e 'const [file, repoDir, pnpm, ...path] = process.argv.slice(1); require("fs").writeFileSync(file, JSON.stringify({ repoDir, pnpm: JSON.parse(pnpm), path }, null, 2));' \
+    "$VENCORD_DIR/tiroir-install.json" "$REPO_DIR" "$PNPM_CMD" \
+    "$(dirname "$(command -v node)")" "$(dirname "$(command -v git)")" $(command -v pnpm >/dev/null 2>&1 && dirname "$(command -v pnpm)")
+
 if [ "$MODE" != "update" ]; then
     echo "→ Injection dans Discord : choisis ton Discord dans la liste."
     echo "  Si macOS bloque l'opération, autorise Terminal dans"
