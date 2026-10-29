@@ -6,7 +6,7 @@
 
 import { Logger } from "@utils/Logger";
 import { findByPropsLazy } from "@webpack";
-import { Alerts, ChannelStore, FluxDispatcher, GuildMemberStore, GuildRoleStore, GuildStore, IconUtils, moment, NavigationRouter, ReadStateStore, RelationshipStore, RestAPI, showToast, useEffect, useRef, UserGuildSettingsStore, UserStore, useState, useStateFromStores } from "@webpack/common";
+import { ActiveJoinedThreadsStore, Alerts, ChannelStore, FluxDispatcher, GuildChannelStore, GuildMemberStore, GuildRoleStore, GuildStore, IconUtils, moment, NavigationRouter, ReadStateStore, RelationshipStore, RestAPI, showToast, useEffect, useRef, UserGuildSettingsStore, UserStore, useState, useStateFromStores } from "@webpack/common";
 
 import { channelLabel, channelPath, RichText } from "../components/RichText";
 import { getHub, MAX_CHANNEL_MESSAGES, MAX_MENTIONS, MentionEntry, MentionKind, updateHub, useHub } from "../store";
@@ -124,7 +124,11 @@ let inboxBusy = false;
  * Une requête à la fois, espacées, pour respecter les limites de l'API.
  */
 function deleteFromInbox(entries: MentionEntry[]) {
-    inboxQueue.push(...entries.filter(e => e.kind !== "message").map(e => e.id));
+    queueInboxDeletes(entries.filter(e => e.kind !== "message").map(e => e.id));
+}
+
+function queueInboxDeletes(ids: string[]) {
+    inboxQueue.push(...ids.filter(id => !inboxQueue.includes(id)));
     if (inboxBusy) return;
     inboxBusy = true;
     (async () => {
@@ -146,6 +150,51 @@ function deleteFromInbox(entries: MentionEntry[]) {
         }
         inboxBusy = false;
     })();
+}
+
+/** Tous les salons (serveurs, fils, messages privés) qui ont au moins une mention non lue */
+function channelsWithMentions(): string[] {
+    const ids = new Set<string>();
+    for (const guild of Object.values(GuildStore.getGuilds())) {
+        const lists = GuildChannelStore.getChannels(guild.id);
+        for (const item of [...(lists?.SELECTABLE ?? []), ...(lists?.VOCAL ?? [])] as any[]) ids.add(item.channel.id);
+        for (const threads of Object.values(ActiveJoinedThreadsStore.getActiveJoinedThreadsForGuild(guild.id) ?? {}))
+            for (const thread of Object.values(threads as any)) ids.add((thread as any).channel?.id);
+    }
+    for (const channel of ChannelStore.getSortedPrivateChannels()) ids.add(channel.id);
+    ids.delete(undefined as any);
+    return [...ids].filter(id => ReadStateStore.getMentionCount(id) > 0);
+}
+
+/** Vide la boîte de réception de Discord, page par page (jusqu'à 1000 mentions) */
+async function purgeInbox() {
+    let before: string | undefined;
+    for (let page = 0; page < 20; page++) {
+        const { body } = await RestAPI.get({ url: "/users/@me/mentions", query: { limit: 50, roles: true, everyone: true, ...(before && { before }) } });
+        const messages = body as any[];
+        if (!messages?.length) break;
+        queueInboxDeletes(messages.map(m => m.id));
+        before = messages[messages.length - 1].id;
+        if (messages.length < 50) break;
+    }
+}
+
+/**
+ * « Tout effacer » : vide la liste, marque comme lus tous les salons qui ont une mention (partout dans Discord,
+ * pas seulement ceux de la liste) jusqu'à leur dernier message, et vide la boîte de réception de Discord.
+ */
+function clearEverything() {
+    const all = getHub().mentions;
+    dismissMentions(all, true);
+    try {
+        const channels = channelsWithMentions()
+            .map(channelId => ({ channelId, messageId: ReadStateStore.lastMessageId(channelId), readStateType: 0 }))
+            .filter(c => c.messageId);
+        if (channels.length) FluxDispatcher.dispatch({ type: "BULK_ACK", context: "APP", channels });
+    } catch (e) {
+        logger.error("marquer les mentions comme lues", e);
+    }
+    purgeInbox().catch(e => logger.error("vider la boîte de réception", e));
 }
 
 /** Retire des entrées du panneau, les marque comme lues dans Discord et les supprime de sa boîte de réception */
@@ -279,10 +328,10 @@ function MentionsView() {
                     title="Tout effacer et marquer comme lu"
                     onClick={() => mentions.length && Alerts.show({
                         title: "Effacer les notifications",
-                        body: "Retirer toutes les notifications ? Leurs salons seront marqués comme lus dans Discord, jusqu'à leur dernier message.",
+                        body: "Retirer toutes les notifications ? Tous les salons où tu as été mentionné seront marqués comme lus, et la boîte de réception de Discord sera vidée.",
                         confirmText: "Effacer",
                         cancelText: "Annuler",
-                        onConfirm: () => dismissMentions(getHub().mentions, true)
+                        onConfirm: clearEverything
                     })}
                 >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

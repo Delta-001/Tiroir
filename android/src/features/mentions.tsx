@@ -109,7 +109,11 @@ let inboxBusy = false;
  * Une requête à la fois, espacées, pour respecter les limites de l'API.
  */
 function deleteFromInbox(entries: MentionEntry[]) {
-    inboxQueue.push(...entries.filter(e => e.kind !== "message").map(e => e.id));
+    queueInboxDeletes(entries.filter(e => e.kind !== "message").map(e => e.id));
+}
+
+function queueInboxDeletes(ids: string[]) {
+    inboxQueue.push(...ids.filter(id => !inboxQueue.includes(id)));
     if (inboxBusy) return;
     inboxBusy = true;
     (async () => {
@@ -128,6 +132,49 @@ function deleteFromInbox(entries: MentionEntry[]) {
         }
         inboxBusy = false;
     })();
+}
+
+/** Tous les salons (serveurs, fils, messages privés) qui ont au moins une mention non lue */
+function channelsWithMentions(): string[] {
+    const ids = new Set<string>();
+    for (const guild of Object.values<any>(Stores.Guild()?.getGuilds() ?? {})) {
+        const lists = Stores.GuildChannel()?.getChannels(guild.id);
+        for (const item of [...(lists?.SELECTABLE ?? []), ...(lists?.VOCAL ?? [])]) if (item?.channel?.id) ids.add(item.channel.id);
+        for (const threads of Object.values<any>(Stores.ActiveJoinedThreads()?.getActiveJoinedThreadsForGuild?.(guild.id) ?? {}))
+            for (const thread of Object.values<any>(threads)) if (thread?.channel?.id) ids.add(thread.channel.id);
+    }
+    const privates = Stores.Channel()?.getSortedPrivateChannels?.() ?? Object.values(Stores.Channel()?.getMutablePrivateChannels?.() ?? {});
+    for (const channel of privates as any[]) if (channel?.id) ids.add(channel.id);
+    return [...ids].filter(id => (Stores.ReadState()?.getMentionCount(id) ?? 0) > 0);
+}
+
+/** Vide la boîte de réception de Discord, page par page (jusqu'à 1000 mentions) */
+async function purgeInbox() {
+    let before: string | undefined;
+    for (let page = 0; page < 20; page++) {
+        const { body } = await apiGet("/users/@me/mentions", { limit: 50, roles: true, everyone: true, ...(before && { before }) });
+        const messages = body as any[];
+        if (!messages?.length) break;
+        queueInboxDeletes(messages.map(m => m.id));
+        before = messages[messages.length - 1].id;
+        if (messages.length < 50) break;
+    }
+}
+
+/**
+ * « Tout effacer » : vide la liste, marque comme lus tous les salons qui ont une mention (partout dans Discord,
+ * pas seulement ceux de la liste) jusqu'à leur dernier message, et vide la boîte de réception de Discord.
+ */
+function clearEverything() {
+    dismiss(hub.mentions, true);
+    try {
+        bulkAck(channelsWithMentions()
+            .map(channelId => ({ channelId, messageId: Stores.ReadState()?.lastMessageId?.(channelId) }))
+            .filter(c => c.messageId) as { channelId: string; messageId: string; }[]);
+    } catch (e) {
+        logger.error("marquer les mentions comme lues", e);
+    }
+    purgeInbox().catch(e => logger.error("vider la boîte de réception", e));
 }
 
 function dismiss(entries: MentionEntry[], toLatest = false) {
@@ -273,10 +320,10 @@ function MentionsView() {
                     accessibilityLabel="Tout effacer et marquer comme lu"
                     onPress={() => mentions.length && showConfirmationAlert({
                         title: "Effacer les notifications",
-                        content: "Retirer toutes les notifications ? Leurs salons seront marqués comme lus dans Discord, jusqu'à leur dernier message.",
+                        content: "Retirer toutes les notifications ? Tous les salons où tu as été mentionné seront marqués comme lus, et la boîte de réception de Discord sera vidée.",
                         confirmText: "Effacer",
                         cancelText: "Annuler",
-                        onConfirm: () => dismiss(hub.mentions, true)
+                        onConfirm: clearEverything
                     })}
                 />
             </RN.View>

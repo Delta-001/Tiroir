@@ -44,7 +44,8 @@ export const Stores = {
     SelectedChannel: store("SelectedChannelStore"),
     SelectedGuild: store("SelectedGuildStore"),
     Relationship: store("RelationshipStore"),
-    GuildChannel: store("GuildChannelStore")
+    GuildChannel: store("GuildChannelStore"),
+    ActiveJoinedThreads: store("ActiveJoinedThreadsStore")
 };
 
 /** Relance le rendu quand un des stores Discord change */
