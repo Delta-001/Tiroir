@@ -232,6 +232,9 @@ export function mountHost() {
         if (state === "open" || state === "opening") {
             place();
             avoidSearchPopout();
+            // Discord positionne la liste juste après l'avoir insérée : on vérifie à nouveau ensuite
+            requestAnimationFrame(avoidSearchPopout);
+            setTimeout(avoidSearchPopout, 150);
         }
     });
     observer.observe(document.body, { childList: true, subtree: true });
