@@ -68,7 +68,10 @@ else {
     $PnpmCmd = @("npx", "--yes", "pnpm@$version")
 }
 $PathDirs = @("node", "git", "pnpm") | ForEach-Object { (Get-Command $_ -ErrorAction SilentlyContinue).Source } | Where-Object { $_ } | ForEach-Object { Split-Path $_ }
-@{ repoDir = $RepoDir; pnpm = $PnpmCmd; path = @($PathDirs) } | ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $VencordDir "tiroir-install.json")
+# Écrit en UTF-8 sans BOM (Set-Content -Encoding UTF8 en ajoute un sous PowerShell 5)
+$Json = @{ repoDir = $RepoDir; pnpm = $PnpmCmd; path = @($PathDirs) } | ConvertTo-Json
+[System.IO.File]::WriteAllText((Join-Path $VencordDir "tiroir-install.json"), $Json, (New-Object System.Text.UTF8Encoding $false))
+Write-Host "→ Mise à jour en un clic configurée ($(Join-Path $VencordDir 'tiroir-install.json'))"
 
 if ($Mode -ne "update") {
     Write-Host "→ Injection dans Discord : choisis ton Discord dans la liste."

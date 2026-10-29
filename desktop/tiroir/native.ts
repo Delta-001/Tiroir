@@ -35,13 +35,20 @@ export interface UpdateStatus {
     behind?: number;
 }
 
-function readConfig(): InstallConfig | null {
+const RERUN_SCRIPT = "Relance une fois le script d'installation (install-mac.sh ou install-windows.ps1) avec l'option « update » depuis ton dossier Tiroir.";
+
+/** Lit la configuration d'installation, ou explique pourquoi elle est inutilisable */
+function readConfig(): InstallConfig | string {
+    if (!existsSync(CONFIG_PATH)) return `${RERUN_SCRIPT} (fichier introuvable : ${CONFIG_PATH})`;
+    let config: InstallConfig;
     try {
-        const config = JSON.parse(readFileSync(CONFIG_PATH, "utf8"));
-        return existsSync(join(config.repoDir, ".git")) ? config : null;
+        // PowerShell 5 écrit un BOM en tête des fichiers UTF-8 : JSON.parse le refuse
+        config = JSON.parse(readFileSync(CONFIG_PATH, "utf8").replace(/^\uFEFF/, ""));
     } catch {
-        return null;
+        return `${RERUN_SCRIPT} (fichier illisible : ${CONFIG_PATH})`;
     }
+    if (!existsSync(join(config.repoDir, ".git"))) return `Dossier Tiroir introuvable : ${config.repoDir}. ${RERUN_SCRIPT}`;
+    return config;
 }
 
 function run(config: InstallConfig, command: string[], cwd: string): Promise<string> {
@@ -61,15 +68,11 @@ function run(config: InstallConfig, command: string[], cwd: string): Promise<str
     });
 }
 
-const missingConfig: UpdateStatus = {
-    ok: false,
-    error: "Relance une fois le script d'installation (install-mac.sh ou install-windows.ps1) avec l'option « update » pour activer la mise à jour en un clic."
-};
 
 /** Compare la version installée avec celle de GitHub */
 export async function checkForUpdates(): Promise<UpdateStatus> {
     const config = readConfig();
-    if (!config) return missingConfig;
+    if (typeof config === "string") return { ok: false, error: config };
     try {
         await run(config, ["git", "fetch", "--quiet"], config.repoDir);
         const current = await run(config, ["git", "rev-parse", "--short", "HEAD"], config.repoDir);
@@ -84,7 +87,7 @@ export async function checkForUpdates(): Promise<UpdateStatus> {
 /** Récupère la dernière version, la copie dans Vencord et recompile */
 export async function update(): Promise<UpdateStatus> {
     const config = readConfig();
-    if (!config) return missingConfig;
+    if (typeof config === "string") return { ok: false, error: config };
     try {
         await run(config, ["git", "pull", "--ff-only", "--quiet"], config.repoDir);
 
