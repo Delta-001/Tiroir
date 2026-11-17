@@ -11,7 +11,7 @@ Works on **macOS**, **Windows** (through [Vencord](https://vencord.dev)) and **A
 - **An always-visible button** (top left) that opens a panel on the right, in place of the member list. It stays open when you switch channels, follows your Discord theme, and can be resized by dragging its left edge (double-click the edge to reset).
 - **Pins**: channels, categories, voice channels, servers and DMs, grouped by server. Right-click (long-press on Android) → « Épingler dans le panneau ». Hold and drag to reorder.
 - **Notifications**: every mention (@you, your roles, @everyone, @here) plus messages from channels set to « All messages ». Removing a notification marks it as read in Discord and deletes it from Discord's inbox. The trash button clears everything: all mentioned channels are marked as read and the inbox is emptied. On Android, older mentions load as you scroll.
-- **Notes**: `<@ID>` shows the username, `<#ID>` the channel, `<@&ID>` the role. Search inside a note. On desktop, paste images (Cmd/Ctrl+V), click an image to enlarge it, and copy it back to the clipboard (handy for report evidence). Right-click a profile → « Épingler dans une note ».
+- **Notes**: `<@ID>` shows the username, `<#ID>` the channel, `<@&ID>` the role. Search inside a note. On desktop, paste images (Cmd/Ctrl+V), click an image to enlarge it, and copy it back to the clipboard (handy for report evidence). Right-click a profile → « Épingler dans une note ». A 🔊 badge shows next to a member who is in a voice channel, even if they never wrote anything or their profile is private: click it to open the channel, double-click to join.
 - **Saved messages**: a discreet tab to keep messages at hand.
 - **Tabs** you can rename, reorder and duplicate (several notes).
 

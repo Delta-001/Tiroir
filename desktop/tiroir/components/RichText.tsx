@@ -6,7 +6,8 @@
 
 import { openUserProfile } from "@utils/discord";
 import { Channel, Role } from "@vencord/discord-types";
-import { ChannelStore, GuildRoleStore, GuildStore, NavigationRouter, ReactDOM, showToast, useEffect, UserStore, UserUtils, useState, useStateFromStores } from "@webpack/common";
+import { findByPropsLazy } from "@webpack";
+import { ChannelStore, GuildRoleStore, GuildStore, NavigationRouter, ReactDOM, showToast, useEffect, UserStore, UserUtils, useState, useStateFromStores, VoiceStateStore } from "@webpack/common";
 import type { ReactNode } from "react";
 
 import { copyImage, useImage } from "../images";
@@ -15,6 +16,9 @@ import { cl } from "../utils";
 const TOKEN_RE = /<@!?(\d{15,21})>|<@&(\d{15,21})>|<#(\d{15,21})>|<(a?):(\w{2,32}):(\d{15,21})>|(https?:\/\/[^\s<]+[^\s<.,:;"')\]!?])|\[img:([a-z0-9]+)\]/g;
 
 const requestedUsers = new Set<string>();
+
+const { selectVoiceChannel } = findByPropsLazy("selectVoiceChannel", "selectChannel");
+const voiceClickTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 /** Récupère un utilisateur absent du cache local, une seule fois par id */
 function requestUser(id: string) {
@@ -47,18 +51,74 @@ export function channelPath(channel: Channel | undefined, channelId: string, mes
     return messageId ? `${base}/${messageId}` : base;
 }
 
+/** Pastille 🔊 si le membre est en vocal (lit les états vocaux reçus par Discord, même sans message ni profil public) */
+function VoiceBadge({ userId }: { userId: string; }) {
+    const state = useStateFromStores([VoiceStateStore], () => {
+        const vs = VoiceStateStore.getVoiceStateForUser(userId);
+        if (!vs?.channelId) return null;
+        return {
+            channelId: vs.channelId,
+            muted: vs.mute || vs.selfMute,
+            deaf: vs.deaf || vs.selfDeaf,
+            streaming: !!(vs.selfStream || vs.stream),
+            video: vs.selfVideo
+        };
+    }, [userId], (a, b) => JSON.stringify(a) === JSON.stringify(b));
+    const channel = useStateFromStores([ChannelStore], () => state ? ChannelStore.getChannel(state.channelId) : undefined, [state?.channelId]);
+    if (!state) return null;
+
+    const guildName = channel?.guild_id ? GuildStore.getGuild(channel.guild_id)?.name : undefined;
+    const where = channel ? (channel.isDM() || channel.isGroupDM() ? "appel privé" : `🔊 ${channel.name}`) : "salon inconnu";
+    const details = [
+        state.deaf ? "casque coupé" : state.muted ? "micro coupé" : null,
+        state.streaming ? "en stream" : null,
+        state.video ? "caméra" : null
+    ].filter(Boolean).join(", ");
+
+    return (
+        <span
+            className={cl("voice-badge", state.deaf || state.muted ? "voice-badge-muted" : null)}
+            title={`En vocal : ${where}${guildName ? ` · ${guildName}` : ""}${details ? ` (${details})` : ""}\nClic : ouvrir le salon · Double-clic : rejoindre le vocal`}
+            onClick={e => {
+                e.stopPropagation();
+                if (!channel) return showToast({ text: "Salon vocal inaccessible", variant: "critical" });
+                // Double-clic : on rejoint le vocal ; simple clic : on ouvre le salon sans le rejoindre
+                const pending = voiceClickTimers.get(userId);
+                if (pending) {
+                    clearTimeout(pending);
+                    voiceClickTimers.delete(userId);
+                    selectVoiceChannel(state.channelId);
+                    return;
+                }
+                voiceClickTimers.set(userId, setTimeout(() => {
+                    voiceClickTimers.delete(userId);
+                    NavigationRouter.transitionTo(channelPath(channel, state.channelId));
+                }, 250));
+            }}
+        >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 3a1 1 0 0 0-1-1h-.06a1 1 0 0 0-.74.32L5.92 7H3a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h2.92l4.28 4.68a1 1 0 0 0 .74.32H11a1 1 0 0 0 1-1V3ZM15.1 20.75c-.58.14-1.1-.33-1.1-.92v-.03c0-.5.37-.92.85-1.05a7 7 0 0 0 0-13.5A1.11 1.11 0 0 1 14 4.2v-.03c0-.6.52-1.06 1.1-.92a9 9 0 0 1 0 17.5Z" />
+            </svg>
+            {channel && !channel.isDM() && !channel.isGroupDM() && <span className={cl("voice-badge-name")}>{channel.name}</span>}
+        </span>
+    );
+}
+
 function UserMention({ id }: { id: string; }) {
     const user = useStateFromStores([UserStore], () => UserStore.getUser(id));
     if (!user) requestUser(id);
 
     return (
-        <span
-            className={cl("mention")}
-            title={user ? `${user.username} · ${id}` : id}
-            onClick={() => openUserProfile(id)}
-        >
-            @{user ? (user.globalName ?? user.username) : "chargement…"}
-        </span>
+        <>
+            <span
+                className={cl("mention")}
+                title={user ? `${user.username} · ${id}` : id}
+                onClick={() => openUserProfile(id)}
+            >
+                @{user ? (user.globalName ?? user.username) : "chargement…"}
+            </span>
+            <VoiceBadge userId={id} />
+        </>
     );
 }
 

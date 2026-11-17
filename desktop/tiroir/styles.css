@@ -1019,3 +1019,35 @@
 .vc-hub-lightbox-button:hover {
     background: rgb(255 255 255 / 24%);
 }
+
+/* Pastille vocale à côté d'un membre mentionné dans une note */
+.vc-hub-voice-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    margin-left: 4px;
+    padding: 0 5px;
+    border-radius: 8px;
+    font-size: 11px;
+    line-height: 16px;
+    vertical-align: middle;
+    color: var(--status-positive, #23a55a);
+    background: color-mix(in srgb, var(--status-positive, #23a55a) 15%, transparent);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.vc-hub-voice-badge:hover {
+    background: color-mix(in srgb, var(--status-positive, #23a55a) 28%, transparent);
+}
+
+.vc-hub-voice-badge-muted {
+    color: var(--status-warning, #f0b232);
+    background: color-mix(in srgb, var(--status-warning, #f0b232) 15%, transparent);
+}
+
+.vc-hub-voice-badge-name {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
