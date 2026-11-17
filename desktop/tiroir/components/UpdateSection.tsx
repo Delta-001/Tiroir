@@ -6,7 +6,10 @@
 
 import { relaunch } from "@utils/native";
 import { PluginNative } from "@utils/types";
-import { Button, Forms, useEffect, useState } from "@webpack/common";
+import { Button } from "@components/Button";
+import { Heading } from "@components/Heading";
+import { Paragraph } from "@components/Paragraph";
+import { useEffect, useState } from "@webpack/common";
 
 import type { UpdateStatus } from "../native";
 
@@ -59,14 +62,14 @@ export function UpdateSection() {
 
     return (
         <section>
-            <Forms.FormTitle tag="h3">Mises à jour</Forms.FormTitle>
-            <Forms.FormText style={{ marginBottom: 10 }}>{text}</Forms.FormText>
+            <Heading tag="h3">Mises à jour</Heading>
+            <Paragraph style={{ marginBottom: 10 }}>{text}</Paragraph>
             <div style={{ display: "flex", gap: 8 }}>
                 {phase === "updated"
                     ? <Button onClick={relaunch}>Redémarrer Discord</Button>
                     : status?.ok && !!status.behind && <Button disabled={phase !== "idle"} onClick={update}>Mettre à jour</Button>}
                 {phase !== "updated" && (
-                    <Button color={Button.Colors.PRIMARY} disabled={phase !== "idle"} onClick={check}>
+                    <Button variant="secondary" disabled={phase !== "idle"} onClick={check}>
                         Vérifier
                     </Button>
                 )}
