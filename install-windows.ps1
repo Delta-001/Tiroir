@@ -2,6 +2,8 @@
 #   .\install-windows.ps1          première installation : télécharge Vencord, compile, injecte dans Discord
 #   .\install-windows.ps1 update   met à jour Tiroir et Vencord (sans réinjecter)
 #   .\install-windows.ps1 inject   réinjecte seulement (après une mise à jour de Discord)
+#   .\install-windows.ps1 relaunch quitte Discord, met à jour, réinjecte sans question et rouvre Discord
+#                                  (c'est ce que fait « Relancer Vencord.bat » en double-clic)
 param([string]$Mode = "install")
 $ErrorActionPreference = "Stop"
 
@@ -35,6 +37,12 @@ function Invoke-Pnpm([string[]]$arguments) {
         $version = (Get-Content package.json -Raw | ConvertFrom-Json).packageManager.Split("@")[1]
         Run npx (@("--yes", "pnpm@$version") + $arguments)
     }
+}
+
+if ($Mode -eq "relaunch") {
+    Write-Host "→ Fermeture de Discord"
+    Get-Process Discord -ErrorAction SilentlyContinue | Stop-Process -Force
+    Start-Sleep -Seconds 2
 }
 
 if ($Mode -ne "inject") {
@@ -73,6 +81,23 @@ $Json = @{ repoDir = $RepoDir; pnpm = $PnpmCmd; path = @($PathDirs) } | ConvertT
 [System.IO.File]::WriteAllText((Join-Path $VencordDir "tiroir-install.json"), $Json, (New-Object System.Text.UTF8Encoding $false))
 [System.IO.File]::WriteAllText((Join-Path $VencordDir "tiroir-version.txt"), (git -C $RepoDir rev-parse HEAD).Trim(), (New-Object System.Text.UTF8Encoding $false))
 Write-Host "→ Mise à jour en un clic configurée ($(Join-Path $VencordDir 'tiroir-install.json'))"
+
+if ($Mode -eq "relaunch") {
+    Write-Host "→ Injection de Vencord dans Discord"
+    Push-Location $VencordDir
+    try { Run node @("scripts/runInstaller.mjs", "--", "--install", "--branch", "stable") } finally { Pop-Location }
+    # (le lanceur de Vencord ne signale pas ses échecs : on vérifie que Discord charge bien Vencord)
+    $Asar = Get-ChildItem (Join-Path $env:LOCALAPPDATA "Discord\app-*\resources\app.asar") -ErrorAction SilentlyContinue | Sort-Object FullName | Select-Object -Last 1
+    if (-not $Asar -or -not (Select-String -Path $Asar.FullName -Pattern "patcher.js" -SimpleMatch -Quiet)) {
+        Write-Host "❌ L'injection a échoué. Lance « .\install-windows.ps1 inject » pour choisir ton Discord à la main."
+        exit 1
+    }
+    Write-Host "→ Ouverture de Discord"
+    Start-Process (Join-Path $env:LOCALAPPDATA "Discord\Update.exe") -ArgumentList "--processStart", "Discord.exe"
+    Write-Host ""
+    Write-Host "✅ Vencord est relancé."
+    exit 0
+}
 
 if ($Mode -ne "update") {
     Write-Host "→ Injection dans Discord : choisis ton Discord dans la liste."

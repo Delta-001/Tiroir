@@ -67,11 +67,20 @@ The Tiroir button appears at the top of the server bar. The plugin updates itsel
 
 If the section asks you to fully restart Discord, quit it completely (Ctrl+R is not enough) and reopen it. If it asks you to run the install script again, do it once with the `update` option (see below).
 
+### After a Discord update (macOS and Windows)
+
+Discord updates often remove Vencord, or leave Discord stuck without a window until Vencord is updated too. Just double-click:
+
+- **macOS**: `Relancer Vencord.command` in the `Tiroir` folder
+- **Windows**: `Relancer Vencord.bat` in the `Tiroir` folder
+
+It quits Discord, updates Vencord and Tiroir, re-injects Vencord without asking anything, then reopens Discord. On macOS, the first run may ask you to allow Terminal in **System Settings → Privacy & Security → App Management**.
+
 ### From the command line (fallback)
 
 - **macOS**: in the `Tiroir` folder, `git pull` then `./install-mac.sh update`, and restart Discord.
 - **Windows**: in the `Tiroir` folder, `git pull` then `powershell -ExecutionPolicy Bypass -File .\install-windows.ps1 update`, and restart Discord.
-- **After a Discord update**, if Vencord is gone: `./install-mac.sh inject` (or `.\install-windows.ps1 inject`).
+- **After a Discord update**: `./install-mac.sh relaunch` (or `.\install-windows.ps1 relaunch`), the same as the double-click files. `inject` only re-injects, letting you pick the Discord install by hand.
 
 ### Android
 

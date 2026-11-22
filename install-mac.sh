@@ -3,10 +3,16 @@
 #   ./install-mac.sh          première installation : télécharge Vencord, compile, injecte dans Discord
 #   ./install-mac.sh update   met à jour Tiroir et Vencord (sans réinjecter)
 #   ./install-mac.sh inject   réinjecte seulement (après une mise à jour de Discord)
+#   ./install-mac.sh relaunch quitte Discord, met à jour, réinjecte sans question et rouvre Discord
+#                             (c'est ce que fait « Relancer Vencord.command » en double-clic)
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
-VENCORD_DIR="${VENCORD_DIR:-$HOME/Vencord}"
+# Dossier Vencord : celui indiqué, sinon ~/Vencord, sinon un Vencord existant qui contient déjà Tiroir
+if [ -z "${VENCORD_DIR:-}" ]; then
+    VENCORD_DIR="$HOME/Vencord"
+    [ ! -d "$VENCORD_DIR" ] && [ -d "$HOME/Developer/Vencord/src/userplugins/tiroir" ] && VENCORD_DIR="$HOME/Developer/Vencord"
+fi
 MODE="${1:-install}"
 export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
@@ -27,6 +33,16 @@ pnpm_run() {
         npx --yes "pnpm@$(node -p "require('./package.json').packageManager.split('@')[1]")" "$@"
     fi
 }
+
+# Node installé hors du PATH par défaut (double-clic depuis le Finder)
+[ -d "$HOME/.local/node/bin" ] && export PATH="$HOME/.local/node/bin:$PATH"
+
+if [ "$MODE" = "relaunch" ]; then
+    echo "→ Fermeture de Discord"
+    osascript -e 'quit app "Discord"' >/dev/null 2>&1 || true
+    for _ in $(seq 1 20); do pgrep -f "Discord.app/Contents/MacOS/Discord" >/dev/null || break; sleep 0.5; done
+    pkill -f "Discord.app/Contents/MacOS/Discord" 2>/dev/null || true
+fi
 
 if [ "$MODE" != "inject" ]; then
     if [ -d "$VENCORD_DIR/.git" ]; then
@@ -59,7 +75,22 @@ node -e 'const [file, repoDir, pnpm, ...path] = process.argv.slice(1); require("
 
 git -C "$REPO_DIR" rev-parse HEAD > "$VENCORD_DIR/tiroir-version.txt"
 
-if [ "$MODE" != "update" ]; then
+if [ "$MODE" = "relaunch" ]; then
+    echo "→ Injection de Vencord dans /Applications/Discord.app"
+    cd "$VENCORD_DIR"
+    node scripts/runInstaller.mjs -- --install --location /Applications/Discord.app || true
+    # (le lanceur de Vencord ne signale pas ses échecs : on vérifie que Discord charge bien Vencord)
+    if ! grep -q "patcher.js" /Applications/Discord.app/Contents/Resources/app.asar 2>/dev/null; then
+        echo "  Si macOS bloque l'opération, autorise Terminal dans"
+        echo "  Réglages Système → Confidentialité et sécurité → Gestion des apps, puis relance."
+        exit 1
+    fi
+    echo "→ Ouverture de Discord"
+    open -a Discord
+    echo
+    echo "✅ Vencord est relancé."
+    exit 0
+elif [ "$MODE" != "update" ]; then
     echo "→ Injection dans Discord : choisis ton Discord dans la liste."
     echo "  Si macOS bloque l'opération, autorise Terminal dans"
     echo "  Réglages Système → Confidentialité et sécurité → Gestion des apps, puis relance ce script."
