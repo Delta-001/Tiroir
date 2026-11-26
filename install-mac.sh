@@ -76,13 +76,26 @@ node -e 'const [file, repoDir, pnpm, ...path] = process.argv.slice(1); require("
 git -C "$REPO_DIR" rev-parse HEAD > "$VENCORD_DIR/tiroir-version.txt"
 
 if [ "$MODE" = "relaunch" ]; then
-    echo "→ Injection de Vencord dans /Applications/Discord.app"
+    echo "→ Injection de Vencord dans Discord"
     cd "$VENCORD_DIR"
-    node scripts/runInstaller.mjs -- --install --location /Applications/Discord.app || true
+    # (l'installeur trouve Discord seul : depuis fin 2026, /Applications/Discord.app n'est qu'un lanceur
+    # et la vraie app est dans ~/Library/Application Support/discord/app-*/Discord.app)
+    node scripts/runInstaller.mjs -- --install --branch stable || true
     # (le lanceur de Vencord ne signale pas ses échecs : on vérifie que Discord charge bien Vencord)
-    if ! grep -q "patcher.js" /Applications/Discord.app/Contents/Resources/app.asar 2>/dev/null; then
-        echo "  Si macOS bloque l'opération, autorise Terminal dans"
-        echo "  Réglages Système → Confidentialité et sécurité → Gestion des apps, puis relance."
+    ASAR="/Applications/Discord.app/Contents/Resources/app.asar"
+    LATEST_APP="$(ls -d "$HOME/Library/Application Support/discord/"app-*/Discord.app 2>/dev/null | sort -V | tail -n 1 || true)"
+    [ -n "$LATEST_APP" ] && ASAR="$LATEST_APP/Contents/Resources/app.asar"
+    if [ -d "$HOME/Library/Application Support/discord" ] && ! ls "$HOME/Library/Application Support/discord" >/dev/null 2>&1; then
+        echo "❌ macOS empêche Terminal de lire le dossier de Discord."
+        echo "  Autorise Terminal dans Réglages Système → Confidentialité et sécurité → Accès complet au disque,"
+        echo "  quitte Terminal (Cmd+Q) puis relance."
+        exit 1
+    fi
+    if ! grep -q "patcher.js" "$ASAR" 2>/dev/null; then
+        echo "❌ L'injection a échoué."
+        echo "  Si macOS bloque l'opération (« operation not permitted »), autorise Terminal dans"
+        echo "  Réglages Système → Confidentialité et sécurité → Gestion des apps"
+        echo "  et → Accès complet au disque, puis relance."
         exit 1
     fi
     echo "→ Ouverture de Discord"

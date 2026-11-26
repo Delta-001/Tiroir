@@ -74,7 +74,7 @@ Discord updates often remove Vencord, or leave Discord stuck without a window un
 - **macOS**: `Relancer Vencord.command` in the `Tiroir` folder
 - **Windows**: `Relancer Vencord.bat` in the `Tiroir` folder
 
-It quits Discord, updates Vencord and Tiroir, re-injects Vencord without asking anything, then reopens Discord. On macOS, the first run may ask you to allow Terminal in **System Settings → Privacy & Security → App Management**.
+It quits Discord, updates Vencord and Tiroir, re-injects Vencord without asking anything, then reopens Discord. On macOS, the first run may ask you to allow Terminal in **System Settings → Privacy & Security → App Management**. Since Discord's new launcher (late 2026), the real app lives in `~/Library/Application Support/discord/app-*/`: if the script says macOS blocks access to that folder, also allow Terminal in **Full Disk Access**, quit Terminal and run it again.
 
 ### From the command line (fallback)
 
