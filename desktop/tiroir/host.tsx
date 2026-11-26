@@ -5,11 +5,11 @@
  */
 
 import ErrorBoundary from "@components/ErrorBoundary";
-import { createRoot } from "@webpack/common";
+import { ChannelSectionStore, createRoot } from "@webpack/common";
 import type { Root } from "react-dom/client";
 
 import { Panel } from "./components/Panel";
-import { closeDiscordSidebars, reopenDiscordSidebars } from "./layout";
+import { closeDiscordSidebars, reopenDiscordSidebars, searchResultsShown } from "./layout";
 import { getHub, subscribeHub, updateHub } from "./store";
 import { cl } from "./utils";
 
@@ -134,9 +134,8 @@ function open() {
     if (!host || state === "open" || state === "opening") return;
     clearTimeout(timer);
 
-    // Mesure et masque la barre native, puis la ferme pour de vrai (membres, discussion du vocal)
+    // Mesure et masque la barre native
     const replaced = place();
-    closeDiscordSidebars();
     // Sans barre native à remplacer, le panneau s'élargit depuis 0 ; sinon il prend sa place en fondu
     host.dataset.grow = String(!replaced && !host.classList.contains(cl("floating")));
     setState("opening");
@@ -144,9 +143,13 @@ function open() {
     // Force le calcul de l'état de départ, pour que la transition vers « open » soit jouée
     void host.offsetWidth;
     setState("open");
+
+    // Puis ferme pour de vrai la barre native (membres, discussion du vocal)
+    closeDiscordSidebars();
 }
 
-function close() {
+/** keepLayout : le panneau laisse seulement la place aux résultats de recherche, sans rouvrir la liste des membres */
+function close(keepLayout = false) {
     if (!host || state === "closed" || state === "closing") return;
     clearTimeout(timer);
 
@@ -158,13 +161,25 @@ function close() {
         setState("closed");
         host!.remove();
         restoreSidebars(true);
-        reopenDiscordSidebars();
+        if (!keepLayout) reopenDiscordSidebars();
     }, ANIMATION_MS);
 }
 
+/**
+ * Les résultats de recherche de Discord s'affichent à la place du panneau : il s'efface pendant
+ * la recherche et revient quand elle se ferme (le bouton du panneau reste actif entre-temps).
+ */
 function sync() {
-    if (getHub().open) open();
-    else close();
+    const searching = searchResultsShown();
+    if (getHub().open && !searching) open();
+    else close(searching);
+}
+
+// Changement de barre latérale (recherche ouverte ou fermée) : en différé pour rouvrir le panneau,
+// qui ferme la liste des membres par une action Flux, interdite pendant une autre action
+function onSectionChange() {
+    if (searchResultsShown()) sync();
+    else setTimeout(sync);
 }
 
 /**
@@ -238,7 +253,12 @@ export function mountHost() {
     root = createRoot(host);
     render();
 
-    unsubscribe = subscribeHub(sync);
+    const unsubscribeHub = subscribeHub(sync);
+    ChannelSectionStore.addChangeListener(onSectionChange);
+    unsubscribe = () => {
+        unsubscribeHub();
+        ChannelSectionStore.removeChangeListener(onSectionChange);
+    };
 
     // Discord reconstruit la vue à chaque changement de salon : on replace le panneau
     // dans la même tâche que la mutation, avant l'affichage, pour éviter tout clignotement

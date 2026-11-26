@@ -5,8 +5,16 @@
  */
 
 import { useUnseenMentions } from "../features/mentions";
-import { togglePanel, useHub } from "../store";
+import { closeSearchResults, searchResultsShown } from "../layout";
+import { setPanelOpen, togglePanel, useHub } from "../store";
 import { cl } from "../utils";
+
+// Pendant une recherche, le panneau s'efface : le bouton ferme alors la recherche pour le faire revenir
+function onClick() {
+    if (!searchResultsShown()) return togglePanel();
+    closeSearchResults();
+    setPanelOpen(true);
+}
 
 export function TitleBarButton() {
     const open = useHub(d => d.open);
@@ -15,7 +23,7 @@ export function TitleBarButton() {
     return (
         <button
             className={cl("titlebar-button", open && "titlebar-button-active")}
-            onClick={togglePanel}
+            onClick={onClick}
             aria-label="Tiroir"
             aria-pressed={open}
             title={unseen > 0 ? `Tiroir · ${unseen} nouvelle(s) notification(s)` : "Tiroir"}
